@@ -3,6 +3,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#7a1633">
 <title>OtaWeb</title>
+<script>
+(function(){function show(m){var b=document.getElementById('err');if(!b){b=document.createElement('div');b.id='err';b.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:99;background:#7a1633;color:#fff;font:12px/1.4 system-ui,sans-serif;padding:10px 12px;word-break:break-all';document.documentElement.appendChild(b)}b.textContent='Erro: '+m}
+addEventListener('error',function(e){var t=e.target;show(t&&(t.src||t.href)?'não carregou '+(t.src||t.href):e.message)},true);
+addEventListener('unhandledrejection',function(e){show(String(e.reason&&e.reason.message||e.reason))})})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
@@ -25,14 +30,14 @@ body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:
 .btn2:hover{filter:brightness(.95)}.btn2.sel{border-color:rgb(var(--brand));color:rgb(var(--brand))}
 .circ{position:relative;display:grid;place-items:center;width:2.5rem;height:2.5rem;border-radius:9999px;background:rgb(var(--soft));color:rgb(var(--ink));transition:.15s}.circ:hover{filter:brightness(.93)}
 .ic{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .6rem;border-radius:.6rem;font-size:.85rem;color:rgb(var(--mut));transition:.15s}.ic:hover{background:rgb(var(--soft))}
-.act{display:flex;align-items:center;justify-content:center;gap:.45rem;padding:.55rem;border-radius:.5rem;font-size:.85rem;font-weight:600;color:rgb(var(--mut));transition:.15s}.act:hover{background:rgb(var(--soft))}
+.act{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;gap:.45rem;padding:.55rem;border-radius:.5rem;font-size:.85rem;font-weight:600;color:rgb(var(--mut));transition:.15s}.act:hover{background:rgb(var(--soft))}
 .bn{display:flex;flex-direction:column;align-items:center;gap:.1rem;padding:.5rem 0 .4rem;font-size:.62rem;font-weight:600;color:rgb(var(--mut));border-top:2px solid transparent}
 .bn.tab-on{color:rgb(var(--brand));border-top-color:rgb(var(--brand))}
 .tn{display:grid;place-items:center;width:5.2rem;height:3.5rem;color:rgb(var(--mut));border-bottom:3px solid transparent;transition:.15s}.tn:hover{background:rgb(var(--soft))}.tn.tab-on{color:rgb(var(--brand));border-bottom-color:rgb(var(--brand))}
 .badge{position:absolute;top:-6px;right:-9px;min-width:1.05rem;height:1.05rem;padding:0 .25rem;border-radius:9999px;background:#d92d4f;color:#fff;font-size:.62rem;font-weight:700;display:grid;place-items:center}
 .ring{padding:3px;border-radius:9999px;background:rgb(var(--brand))}
 .rpick{position:absolute;bottom:calc(100% - 6px);left:0;display:none;gap:.3rem;padding:.4rem .55rem;background:rgb(var(--card));border:1px solid rgb(var(--line));border-radius:9999px;box-shadow:0 8px 28px rgba(0,0,0,.28);z-index:20}
-.rwrap:hover .rpick,.rwrap.open .rpick{display:flex}.rpick button{transition:transform .15s}.rpick button:hover{transform:scale(1.4) translateY(-5px)}
+.rwrap.open .rpick{display:flex}@media (hover:hover){.rwrap:hover .rpick{display:flex}}.rpick button{transition:transform .15s}.rpick button:hover{transform:scale(1.4) translateY(-5px)}
 .pop{animation:pop .22s ease-out}@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}}
 .slide{animation:sl .3s ease-out}@keyframes sl{from{opacity:0;transform:translateY(10px)}}
 .hb svg{animation:hb .35s}@keyframes hb{50%{transform:scale(1.35)}}

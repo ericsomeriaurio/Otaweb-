@@ -52,13 +52,13 @@ async function boot() {
 }
 async function startSession(ses) {
   if (!ses) { P = null; $('#auth').classList.remove('hidden'); return }
-  if (P && P.id === ses.user.id) return;
+  if ((P && P.id === ses.user.id) || startSession.busy) return; startSession.busy = true;
   const { data, error } = await sb.from('profiles').select('*').eq('id', ses.user.id).single();
-  if (error || !data) { T('Não consegui carregar seu perfil: ' + (error ? error.message : 'perfil não encontrado')); return }
+  if (error || !data) { T('Não consegui carregar seu perfil: ' + (error ? error.message : 'perfil não encontrado')); startSession.busy = false; return }
   P = data; $('#auth').classList.add('hidden'); go('feed'); live(); loadBadge();
   if (location.hash.startsWith('#u-')) openHandle(location.hash.slice(3));
 }
-function live() {
+function live() { if (live.on) return; live.on = true;
   sb.channel('feed').on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, soon)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, soon)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, soon)
@@ -121,7 +121,7 @@ function reelH(p) {
   return `<div class="snap-start h-full relative grid place-items-center"><video src="${E(p.media_url)}" loop playsinline muted class="h-full w-full object-contain" onclick="this.muted=false;this.paused?this.play():this.pause()"></video>
   <div class="absolute bottom-5 left-4 right-20 text-white pointer-events-none"><div class="font-semibold text-sm">@${E(p.author.handle)}</div><div class="text-sm opacity-90">${E(p.body)}</div></div>
   <div class="absolute bottom-6 right-3 flex flex-col gap-4 text-white items-center text-xs">
-   <button onclick="react('${p.id}',${mine ? 'null' : "'love'"})" class="grid place-items-center gap-1" style="${mine ? 'color:#ff5a7e' : ''}">${ic('heart', !!mine, 28)}${p.likes.length}</button>
+   ${reelBtn(p)}
    <button onclick="share('${p.id}')">${ic('share', false, 26)}</button><button onclick="dlm('${E(p.media_url)}')">${ic('download', false, 26)}</button></div></div>`;
 }
 
@@ -138,6 +138,21 @@ async function prep(rows) {
   }
   return rows;
 }
+function mk(h) { const t = document.createElement('template'); t.innerHTML = h.trim(); const n = t.content.firstElementChild; n.dataset.h = h; return n }
+function carry(o, n, id) { const c = o.querySelector('#c-' + id), nc = n.querySelector('#c-' + id); if (c && nc && !c.classList.contains('hidden')) { nc.innerHTML = c.innerHTML; nc.classList.remove('hidden') } }
+function paint(el, list) {
+  const old = new Map([...el.children].filter(c => c.tagName === 'ARTICLE').map(c => [c.id, c])), first = old.size === 0, out = [];
+  list.forEach(p => {
+    let h; try { h = postH(p) } catch (e) { console.error(e); return }
+    const o = old.get('p-' + p.id);
+    if (o && o.dataset.h === h) out.push(o); else { const n = mk(h); if (first) n.classList.add('slide'); if (o) carry(o, n, p.id); out.push(n) }
+  });
+  el.replaceChildren(...out);
+}
+function repaintPost(p) {
+  const o = document.getElementById('p-' + p.id); if (!o) return; let h; try { h = postH(p) } catch (e) { return }
+  if (o.dataset.h !== h) { const n = mk(h); carry(o, n, p.id); o.replaceWith(n) }
+}
 const errH = e => `<p class="text-center text-xs text-brand py-8 px-4 break-words">Erro: ${E(e.message || e)}</p>`;
 const safe = list => list.map(p => { try { return postH(p) } catch (e) { console.error(e); return '' } }).join('');
 async function loadFeed() {
@@ -145,7 +160,7 @@ async function loadFeed() {
     const { data, error } = await sb.from('posts').select(SEL).order('created_at', { ascending: false }).limit(40);
     if (error) { $('#posts').innerHTML = errH(error); return }
     posts = await prep(data);
-    $('#posts').innerHTML = safe(posts) || '<p class="text-center text-sm text-mut py-10">Nenhum post ainda. Seja o primeiro a postar!</p>';
+    if (!posts.length) $('#posts').innerHTML = '<p class="text-center text-sm text-mut py-10">Nenhum post ainda. Seja o primeiro a postar!</p>'; else paint($('#posts'), posts);
   } catch (e) { $('#posts').innerHTML = errH(e) }
 }
 function mediaH(url, type, c = 'rounded-xl w-full max-h-[28rem] bg-black') {
@@ -168,11 +183,14 @@ const lp = el => { lpT = setTimeout(() => { el.classList.add('open'); el.dataset
 function mainReact(b, id, has) { const w = b.closest('.rwrap'); if (w.dataset.lp) { delete w.dataset.lp; return } react(id, has ? null : 'like') }
 document.addEventListener('click', e => { if (!e.target.closest('.rwrap')) document.querySelectorAll('.rwrap.open').forEach(x => x.classList.remove('open')) });
 async function react(id, type) {
-  const p = posts.find(x => x.id === id), mine = p.likes.find(l => l.user_id === P.id);
-  if (!type || (mine && mine.reaction === type)) await sb.from('likes').delete().match({ post_id: id, user_id: P.id });
-  else { const { error } = await sb.from('likes').upsert({ post_id: id, user_id: P.id, reaction: type }, { onConflict: 'post_id,user_id' }); if (error) T('Falta rodar a migração de reações no Supabase.') }
-  refresh();
+  const p = posts.find(x => x.id === id); if (!p) return;
+  const mine = p.likes.find(l => l.user_id === P.id), remove = !type || (mine && mine.reaction === type);
+  p.likes = p.likes.filter(l => l.user_id !== P.id); if (!remove) p.likes.push({ user_id: P.id, reaction: type });
+  const rb = document.getElementById('rb-' + id); if (rb) rb.outerHTML = reelBtn(p); else repaintPost(p);
+  const { error } = remove ? await sb.from('likes').delete().match({ post_id: id, user_id: P.id }) : await sb.from('likes').upsert({ post_id: id, user_id: P.id, reaction: type }, { onConflict: 'post_id,user_id' });
+  if (error) { T('Não salvou a reação: ' + error.message); refresh() }
 }
+function reelBtn(p) { const mine = p.likes.find(l => l.user_id === P.id); return `<button id="rb-${p.id}" onclick="react('${p.id}',${mine ? 'null' : "'love'"})" class="grid place-items-center gap-1" style="${mine ? 'color:#ff5a7e' : ''}">${ic('heart', !!mine, 28)}${p.likes.length}</button>` }
 function postH(p) {
   const a = p.author, mine = p.likes.find(l => l.user_id === P.id), mt = mine && (mine.reaction || 'like'), nc = p.comments[0]?.count || 0, rc = p.likes.length,
     types = [...new Set(p.likes.map(l => l.reaction || 'like'))].slice(0, 3), tot = p.poll_options.reduce((n, o) => n + o.poll_votes.length, 0);
@@ -182,12 +200,12 @@ function postH(p) {
   }).join('')}<div class="text-xs text-mut">${tot} voto${tot === 1 ? '' : 's'}</div></div>` : '';
   const o = p.orig ? `<div class="mx-4 mb-3 border border-line rounded-lg p-3 space-y-2 text-sm"><div class="text-xs font-semibold text-mut">${ic('repeat', false, 13)} @${E(p.orig.author.handle)}</div><div class="whitespace-pre-wrap break-words">${E(p.orig.body)}</div>${mediaH(p.orig.media_url, p.orig.media_type, 'rounded-lg max-h-72')}</div>` : '';
   const sum = rc || nc ? `<div class="flex items-center justify-between px-4 py-2 text-xs text-mut"><div class="flex items-center gap-1.5">${rc ? `<span class="flex -space-x-1">${types.map(t => `<span class="rounded-full ring-2 ring-card">${rx(t, 18)}</span>`).join('')}</span>${rc}` : ''}</div>${nc ? `<button class="hover:underline" onclick="toggleC('${p.id}')">${nc} comentário${nc > 1 ? 's' : ''}</button>` : ''}</div>` : '';
-  return `<article class="card slide overflow-hidden" id="p-${p.id}">
+  return `<article class="card overflow-hidden" id="p-${p.id}">
   <div class="flex items-center gap-3 px-4 pt-3 pb-2"><div class="cursor-pointer flex items-center gap-3 flex-1 min-w-0" onclick="showProfile('${a.id}')">${av(a, 42)}<div class="min-w-0"><div class="text-sm font-semibold truncate">${E(a.name)}</div><div class="text-xs text-mut">@${E(a.handle)} · ${ago(p.created_at)}</div></div></div>
    <button class="circ !w-9 !h-9 !bg-transparent" onclick="postMenu('${p.id}')" aria-label="Mais opções">${ic('more', false, 20)}</button></div>
   ${p.body ? `<p class="px-4 pb-3 text-[15px] leading-relaxed whitespace-pre-wrap break-words">${E(p.body)}</p>` : ''}${p.media_url ? `<div class="bg-black">${mediaH(p.media_url, p.media_type, 'w-full max-h-[32rem]')}</div>` : ''}${o}${poll}${sum}
   <div class="grid grid-cols-3 gap-1 px-2 py-1 border-t border-line">
-   <div class="rwrap relative" ontouchstart="lp(this)" ontouchend="lpEnd()" ontouchmove="lpEnd()"><div class="rpick">${Object.keys(RX).map(k => `<button onclick="react('${p.id}','${k}')" title="${RX[k][0]}">${rx(k, 32)}</button>`).join('')}</div>
+   <div class="rwrap relative" oncontextmenu="return false" ontouchstart="lp(this)" ontouchend="lpEnd()" ontouchmove="lpEnd()"><div class="rpick">${Object.keys(RX).map(k => `<button onclick="react('${p.id}','${k}')" title="${RX[k][0]}">${rx(k, 32)}</button>`).join('')}</div>
     <button class="act w-full ${mine ? 'hb' : ''}" style="${mine ? 'color:' + RX[mt][1] : ''}" onclick="mainReact(this,'${p.id}',${!!mine})">${mine ? rx(mt, 20) : ic('like', false, 20)}${mine ? RX[mt][0] : 'Curtir'}</button></div>
    <button class="act" onclick="toggleC('${p.id}')">${ic('msgc', false, 19)}Comentar</button>
    <button class="act" onclick="share('${p.id}')">${ic('share', false, 19)}Compartilhar</button></div>
@@ -210,12 +228,13 @@ function share(id) {
 }
 async function toggleC(id) {
   const box = $('#c-' + id); if (!box.classList.contains('hidden')) return box.classList.add('hidden');
-  box.classList.remove('hidden'); const { data } = await sb.from('comments').select('id,body,created_at,author:profiles!author(id,handle,name,avatar_url)').eq('post_id', id).order('created_at');
+  box.classList.remove('hidden'); await loadComments(id) }
+async function loadComments(id) { const box = $('#c-' + id); const { data } = await sb.from('comments').select('id,body,created_at,author:profiles!author(id,handle,name,avatar_url)').eq('post_id', id).order('created_at');
   box.innerHTML = (data || []).map(c => `<div class="flex gap-2 text-xs">${av(c.author, 28)}<div class="bg-soft rounded-xl px-3 py-1.5 flex-1"><b>${E(c.author.name)}</b> <span class="text-mut">${ago(c.created_at)}</span><div class="whitespace-pre-wrap break-words">${E(c.body)}</div>${c.author.id === P.id ? `<button class="text-[10px] text-brand" onclick="delC('${c.id}','${id}')">apagar</button>` : ''}</div></div>`).join('') +
     `<div class="flex gap-2"><input id="ci-${id}" class="inp !rounded-full" placeholder="Comentar..." onkeydown="if(event.key==='Enter')addC('${id}')"><button class="btn" onclick="addC('${id}')">${ic('send', false, 16)}</button></div>`;
 }
-async function addC(id) { const i = $('#ci-' + id), b = i.value.trim(); if (!b) return; await sb.from('comments').insert({ post_id: id, author: P.id, body: b }); await refresh(); toggleC(id) }
-async function delC(c, id) { await sb.from('comments').delete().eq('id', c); await refresh(); toggleC(id) }
+async function addC(id) { const i = $('#ci-' + id), b = i.value.trim(); if (!b) return; await sb.from('comments').insert({ post_id: id, author: P.id, body: b }); await loadComments(id); refresh() }
+async function delC(c, id) { await sb.from('comments').delete().eq('id', c); await loadComments(id); refresh() }
 
 /* ---------- PUBLICAR ---------- */
 function pick(f) { if (!f) return; file = f; prevH() }
@@ -287,7 +306,7 @@ boot();
 
 /* ---------- VISUAL: cartão do usuário e sugestões ---------- */
 function paintMe() {
-  if (!P) return; $('#me-av').innerHTML = av(P, 42);
+  if (!P) return; { const a = $('#me-av'), h = av(P, 42); if (a.dataset.h !== h) { a.innerHTML = h; a.dataset.h = h } }
   ($('#me-card') || {}).innerHTML = `${av(P, 38)}<div class="min-w-0"><div class="text-sm font-semibold truncate">${E(P.name)}</div><div class="text-[11px] text-mut truncate">@${E(P.handle)}</div></div>`;
 }
 async function loadSuggest() {
