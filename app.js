@@ -47,13 +47,16 @@ async function doAuth() {
 }
 async function boot() {
   applyTheme(); hydrate(); renderNav(); authMode('in');
-  sb.auth.onAuthStateChange(async (_, s) => {
-    if (!s) { P = null; $('#auth').classList.remove('hidden'); return }
-    if (P && P.id === s.user.id) return;
-    const { data } = await sb.from('profiles').select('*').eq('id', s.user.id).single();
-    if (!data) return; P = data; $('#auth').classList.add('hidden'); go('feed'); live(); loadBadge();
-    if (location.hash.startsWith('#u-')) openHandle(location.hash.slice(3));
-  });
+  // Importante: sem await aqui dentro, senão o supabase-js pode travar ao recarregar a página
+  sb.auth.onAuthStateChange((_, ses) => { setTimeout(() => startSession(ses), 0) });
+}
+async function startSession(ses) {
+  if (!ses) { P = null; $('#auth').classList.remove('hidden'); return }
+  if (P && P.id === ses.user.id) return;
+  const { data, error } = await sb.from('profiles').select('*').eq('id', ses.user.id).single();
+  if (error || !data) { T('Não consegui carregar seu perfil: ' + (error ? error.message : 'perfil não encontrado')); return }
+  P = data; $('#auth').classList.add('hidden'); go('feed'); live(); loadBadge();
+  if (location.hash.startsWith('#u-')) openHandle(location.hash.slice(3));
 }
 function live() {
   sb.channel('feed').on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, soon)
@@ -109,7 +112,7 @@ async function loadNotifs() {
 async function loadBadge() { const { count } = await sb.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', P.id).eq('read', false); document.querySelectorAll('.b-n').forEach(b => { b.textContent = count > 9 ? '9+' : count; b.classList.toggle('hidden', !count) }) }
 /* reels */
 async function loadReels() {
-  const { data } = await sb.from('posts').select(SEL).eq('media_type', 'video').order('created_at', { ascending: false }).limit(20); posts = data || [];
+  const { data } = await sb.from('posts').select(SEL).eq('media_type', 'video').order('created_at', { ascending: false }).limit(20); posts = await prep(data);
   $('#v-reels').innerHTML = `<div id="rl" class="h-full overflow-y-scroll snap-y snap-mandatory bg-black md:max-w-sm md:mx-auto">` + (posts.map(reelH).join('') || '<div class="h-full grid place-items-center text-center text-sm text-white/70 p-8">Nenhum reel ainda.<br>Publique um vídeo e ele aparece aqui.</div>') + '</div>';
   const io = new IntersectionObserver(es => es.forEach(e => e.isIntersecting ? e.target.play().catch(() => {}) : e.target.pause()), { threshold: .7 }); document.querySelectorAll('#rl video').forEach(v => io.observe(v));
 }
@@ -123,11 +126,27 @@ function reelH(p) {
 }
 
 /* ---------- FEED ---------- */
-const SEL = '*, author:profiles!author(id,handle,name,avatar_url), likes(user_id,reaction), comments(count), saves(user_id), poll_options(id,label,poll_votes(user_id)), orig:posts!repost_of(id,body,media_url,media_type,author:profiles!author(handle,name))';
+const SEL = '*, au:profiles!author(id,handle,name,avatar_url), likes(user_id,reaction), comments(count), saves(user_id), poll_options!post_id(id,label,poll_votes!option_id(user_id))';
+async function prep(rows) {
+  rows = rows || [];
+  rows.forEach(r => { r.author = r.au || { id: '', handle: 'otaku', name: 'Otaku' } });
+  const ids = [...new Set(rows.map(r => r.repost_of).filter(Boolean))];
+  if (ids.length) {
+    const { data } = await sb.from('posts').select('id,body,media_url,media_type,au:profiles!author(handle,name)').in('id', ids), m = {};
+    (data || []).forEach(o => m[o.id] = { ...o, author: o.au || { handle: 'otaku' } });
+    rows.forEach(r => { r.orig = m[r.repost_of] || null });
+  }
+  return rows;
+}
+const errH = e => `<p class="text-center text-xs text-brand py-8 px-4 break-words">Erro: ${E(e.message || e)}</p>`;
+const safe = list => list.map(p => { try { return postH(p) } catch (e) { console.error(e); return '' } }).join('');
 async function loadFeed() {
-  const { data, error } = await sb.from('posts').select(SEL).order('created_at', { ascending: false }).limit(40);
-  if (error) { $('#posts').innerHTML = `<p class="text-center text-xs text-brand py-8">Erro ao carregar: ${E(error.message)}</p>`; return }
-  posts = data; $('#posts').innerHTML = posts.map(postH).join('') || '<p class="text-center text-sm text-mut py-10">Nenhum post ainda. Seja o primeiro a postar!</p>';
+  try {
+    const { data, error } = await sb.from('posts').select(SEL).order('created_at', { ascending: false }).limit(40);
+    if (error) { $('#posts').innerHTML = errH(error); return }
+    posts = await prep(data);
+    $('#posts').innerHTML = safe(posts) || '<p class="text-center text-sm text-mut py-10">Nenhum post ainda. Seja o primeiro a postar!</p>';
+  } catch (e) { $('#posts').innerHTML = errH(e) }
 }
 function mediaH(url, type, c = 'rounded-xl w-full max-h-[28rem] bg-black') {
   if (!url) return ''; const u = E(url);
@@ -234,12 +253,13 @@ async function publish() {
 
 /* ---------- PERFIL ---------- */
 async function openHandle(h) { const { data } = await sb.from('profiles').select('id').eq('handle', h).maybeSingle(); if (data) showProfile(data.id) }
-async function showProfile(id) { window.lastProfile = id;
+async function showProfile(id) { try { await _showProfile(id) } catch (e) { go('other'); $('#v-other').innerHTML = errH(e) } }
+async function _showProfile(id) { window.lastProfile = id;
   go('other'); const [{ data: u }, { count: seg }, { count: sing }, { data: f }, { data: ps }] = await Promise.all([
     sb.from('profiles').select('*').eq('id', id).single(), sb.from('follows').select('*', { count: 'exact', head: true }).eq('followee', id),
     sb.from('follows').select('*', { count: 'exact', head: true }).eq('follower', id), sb.from('follows').select('follower').match({ follower: P.id, followee: id }),
     sb.from('posts').select(SEL).eq('author', id).order('created_at', { ascending: false }).limit(30)]);
-  if (!u) return; posts = ps || []; const mine = id === P.id, link = location.href.split('#')[0] + '#u-' + u.handle, fl = f && f.length;
+  if (!u) { $('#v-other').innerHTML = '<p class="text-center text-sm text-mut py-10">Perfil não encontrado.</p>'; return } posts = await prep(ps); const mine = id === P.id, link = location.href.split('#')[0] + '#u-' + u.handle, fl = f && f.length;
   $('#v-other').classList.remove('hidden'); $('#v-feed').classList.add('hidden');
   $('#v-other').innerHTML = `<div class="card p-5 text-center space-y-2 pop"><div class="flex justify-center"><div class="ring"><div class="bg-card rounded-full p-1">${av(u, 92)}</div></div></div>
   <div class="text-lg font-bold">${E(u.name)}</div><div class="text-xs text-brand">@${E(u.handle)}</div><p class="text-sm text-mut">${E(u.bio || '')}</p>${u.fav_anime ? `<div class="text-xs text-brand">${ic('star', true, 13)} ${E(u.fav_anime)}</div>` : ''}
@@ -247,20 +267,21 @@ async function showProfile(id) { window.lastProfile = id;
   <div class="text-[11px] text-mut break-all">${E(link)}</div>
   <div class="flex gap-2 justify-center flex-wrap"><button class="btn2" onclick="copy('${E(link)}')">${ic('link', false, 15)} Copiar link</button>
   ${mine ? `<label class="btn2 cursor-pointer">${ic('camera', false, 15)} Foto<input type="file" accept="image/*" class="hidden" onchange="setAv(this.files[0])"></label><button class="btn2" onclick="editProfile()">${ic('edit', false, 15)} Editar</button>` : `<button class="btn" onclick="follow('${id}',${!!fl})">${fl ? 'Seguindo' : 'Seguir'}</button>`}</div></div>
-  <div class="space-y-3">${posts.map(postH).join('') || '<p class="text-center text-xs text-mut py-6">Sem posts ainda.</p>'}</div>`;
+  <div class="space-y-3">${safe(posts) || '<p class="text-center text-xs text-mut py-6">Sem posts ainda.</p>'}</div>`;
 }
-async function setAv(f) { if (!f) return; T('Enviando foto...'); const m = await upload(f); if (!m) return; await sb.from('profiles').update({ avatar_url: m.url }).eq('id', P.id); P.avatar_url = m.url; T('Foto atualizada!'); showProfile(P.id) }
-async function editProfile() { const v = await ask('Editar perfil', ['Nome (vazio = manter)', 'Bio', 'Anime favorito']); if (!v) return; const u = {}; if (v[0]) u.name = v[0]; if (v[1]) u.bio = v[1]; if (v[2]) u.fav_anime = v[2]; await sb.from('profiles').update(u).eq('id', P.id); Object.assign(P, u); showProfile(P.id) }
+async function setAv(f) { if (!f) return; T('Enviando foto...'); const m = await upload(f); if (!m) return; const { error } = await sb.from('profiles').update({ avatar_url: m.url }).eq('id', P.id); if (error) return T('Não salvou a foto: ' + error.message); P.avatar_url = m.url; paintMe(); T('Foto atualizada!'); showProfile(P.id) }
+async function editProfile() { const v = await ask('Editar perfil', ['Nome (vazio = manter)', 'Bio', 'Anime favorito']); if (!v) return; const u = {}; if (v[0]) u.name = v[0]; if (v[1]) u.bio = v[1]; if (v[2]) u.fav_anime = v[2]; const { error } = await sb.from('profiles').update(u).eq('id', P.id); if (error) return T('Não salvou: ' + error.message); Object.assign(P, u); paintMe(); showProfile(P.id) }
 async function follow(id, on) { on ? await sb.from('follows').delete().match({ follower: P.id, followee: id }) : await sb.from('follows').insert({ follower: P.id, followee: id }); showProfile(id) }
 
 /* ---------- BUSCA ---------- */
 function debSearch(q) { clearTimeout(st); st = setTimeout(() => search(q.trim()), 350) }
-async function search(q) {
+async function search(q) { try { await _search(q) } catch (e) { $('#v-other').innerHTML = errH(e) } }
+async function _search(q) {
   if (!q) return go('feed'); go('other'); $('#v-feed').classList.add('hidden'); $('#v-other').classList.remove('hidden'); const s = q.replace(/[%,()]/g, ' ');
-  const [{ data: u }, { data: ps }] = await Promise.all([sb.from('profiles').select('id,name,handle,avatar_url').or(`name.ilike.%${s}%,handle.ilike.%${s}%`).limit(10), sb.from('posts').select(SEL).ilike('body', `%${s}%`).order('created_at', { ascending: false }).limit(20)]);
-  posts = ps || [];
+  const [{ data: u }, { data: ps, error: pe }] = await Promise.all([sb.from('profiles').select('id,name,handle,avatar_url').or(`name.ilike.%${s}%,handle.ilike.%${s}%`).limit(10), sb.from('posts').select(SEL).ilike('body', `%${s}%`).order('created_at', { ascending: false }).limit(20)]);
+  posts = await prep(ps);
   $('#v-other').innerHTML = `<h3 class="text-sm font-bold text-brand">Pessoas</h3>` + ((u || []).map(x => `<button onclick="showProfile('${x.id}')" class="card w-full flex items-center gap-3 p-3 text-left">${av(x)}<div><div class="text-sm font-bold">${E(x.name)}</div><div class="text-[11px] text-mut">@${E(x.handle)}</div></div></button>`).join('') || '<p class="text-xs text-mut">Ninguém encontrado.</p>') +
-    `<h3 class="text-sm font-bold text-brand">Publicações</h3>` + (posts.map(postH).join('') || '<p class="text-xs text-mut">Nada encontrado.</p>');
+    `<h3 class="text-sm font-bold text-brand">Publicações</h3>` + (pe ? errH(pe) : (safe(posts) || '<p class="text-xs text-mut">Nada encontrado.</p>'));
 }
 boot();
 
