@@ -31,7 +31,7 @@ async function dlm(url) {
 async function copy(t) { try { await navigator.clipboard.writeText(t); T('Copiado! 📋') } catch (e) { T('Não foi possível copiar.') } }
 
 /* ---------- AUTH ---------- */
-function authMode(m) { mode = m; $('#up-f').classList.toggle('hidden', m !== 'up'); $('#a-go').textContent = m === 'up' ? 'Criar minha conta' : 'Entrar'; $('#t-in').classList.toggle('tab-on', m === 'in'); $('#t-up').classList.toggle('tab-on', m === 'up'); $('#a-err').textContent = '' }
+function authMode(m) { mode = m; $('#up-f').classList.toggle('hidden', m !== 'up'); $('#a-go').textContent = m === 'up' ? 'Criar minha conta' : 'Entrar'; $('#t-in').classList.toggle('tab-on', m === 'in'); $('#t-up').classList.toggle('tab-on', m === 'up'); $('#a-err').textContent = ''; $('#a-forgot').classList.toggle('hidden', m === 'up') }
 async function doAuth() {
   const email = $('#a-email').value.trim(), password = $('#a-pass').value, err = $('#a-err'); err.textContent = ''; $('#a-go').disabled = true;
   let r;
@@ -44,19 +44,23 @@ async function doAuth() {
   } else r = await sb.auth.signInWithPassword({ email, password });
   $('#a-go').disabled = false;
   if (r.error) err.textContent = /Database error|duplicate|unique/i.test(r.error.message) ? 'Esse @usuario ou e-mail já existe.' : /Invalid login/i.test(r.error.message) ? 'E-mail ou senha incorretos.' : r.error.message;
+  else if (r.data && r.data.session) startSession(r.data.session);
 }
 async function boot() {
   applyTheme(); hydrate(); renderNav(); authMode('in');
-  // Importante: sem await aqui dentro, senão o supabase-js pode travar ao recarregar a página
-  sb.auth.onAuthStateChange((_, ses) => { setTimeout(() => startSession(ses), 0) });
+  // sem await dentro do callback (evita travar o supabase-js)
+  sb.auth.onAuthStateChange((ev, ses) => { setTimeout(() => ev === 'PASSWORD_RECOVERY' ? setTimeout(() => typeof recoveryForm === 'function' && recoveryForm(), 400) : startSession(ses), 0) });
 }
 async function startSession(ses) {
-  if (!ses) { P = null; $('#auth').classList.remove('hidden'); return }
-  if ((P && P.id === ses.user.id) || startSession.busy) return; startSession.busy = true;
-  const { data, error } = await sb.from('profiles').select('*').eq('id', ses.user.id).single();
-  if (error || !data) { T('Não consegui carregar seu perfil: ' + (error ? error.message : 'perfil não encontrado')); startSession.busy = false; return }
-  P = data; $('#auth').classList.add('hidden'); go('feed'); live(); loadBadge(); if (typeof chatLive === 'function') chatLive(); if (typeof socialStart === 'function') socialStart();
-  if (location.hash.startsWith('#u-')) openHandle(location.hash.slice(3));
+  if (!ses) { P = null; startSession.busy = false; $('#auth').classList.remove('hidden'); return }
+  if ((P && P.id === ses.user.id) || startSession.busy) return;
+  startSession.busy = true;
+  try {
+    const { data, error } = await sb.from('profiles').select('*').eq('id', ses.user.id).single();
+    if (error || !data) { T('Não consegui carregar seu perfil: ' + (error ? error.message : 'perfil não encontrado')); return }
+    P = data; $('#auth').classList.add('hidden'); go('feed'); live(); loadBadge(); if (typeof chatLive === 'function') chatLive(); if (typeof socialStart === 'function') socialStart();
+    if (location.hash.startsWith('#u-')) openHandle(location.hash.slice(3));
+  } finally { startSession.busy = false }
 }
 function live() { if (live.on) return; live.on = true;
   sb.channel('feed').on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, soon)
@@ -88,27 +92,13 @@ function soonV(v, i, t, d) { $('#v-' + v).innerHTML = `<div class="max-w-md mx-a
 async function refresh() {
   if (!$('#v-feed').classList.contains('hidden')) await loadFeed();
   else if (!$('#v-reels').classList.contains('hidden')) await loadReels();
-  else if (!$('#v-other').classList.contains('hidden')) { const q = $('#q').value.trim(); q ? await search(q) : await showProfile(window.lastProfile) }
+  else if (!$('#v-other').classList.contains('hidden')) { const q = $('#q').value.trim(); q ? await search(q) : (window.reloadOther ? await window.reloadOther() : await showProfile(window.lastProfile)) }
 }
 function toggleSearch() { const b = $('#sbar'); b.classList.toggle('hidden'); if (!b.classList.contains('hidden')) $('#q').focus(); else { $('#q').value = ''; go('feed') } }
 /* tema claro/escuro */
 function applyTheme() { const t = localStorage.getItem('ow-theme') || 'auto'; document.documentElement.classList.toggle('dark', t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches)) }
 function setTheme(t) { localStorage.setItem('ow-theme', t); applyTheme(); renderMenu() }
-function renderMenu() {
-  const t = localStorage.getItem('ow-theme') || 'auto';
-  $('#v-menu').innerHTML = `<div class="max-w-xl mx-auto p-3 md:py-5 space-y-3"><h2 class="font-bold text-xl px-1">Menu</h2>
-  <button class="card w-full flex items-center gap-3 p-4 text-left" onclick="showProfile('${P.id}')">${av(P, 52)}<div><div class="font-semibold">${E(P.name)}</div><div class="text-xs text-mut">Ver seu perfil</div></div></button>
-  <div class="card p-4 space-y-3"><div class="text-sm font-semibold">Aparência</div><div class="grid grid-cols-3 gap-2">${[['light', 'sun', 'Claro'], ['dark', 'moon', 'Escuro'], ['auto', 'monitor', 'Sistema']].map(([k, i, l]) => `<button class="btn2 ${t === k ? 'sel' : ''}" onclick="setTheme('${k}')">${ic(i, false, 16)}${l}</button>`).join('')}</div></div>
-  <button class="card w-full flex items-center gap-3 p-4 text-left text-brand font-semibold" onclick="sb.auth.signOut()">${ic('logout', false, 20)}Sair da conta</button></div>`;
-}
 /* notificações */
-async function loadNotifs() {
-  const { data } = await sb.from('notifications').select('id,type,read,created_at,actor:profiles!actor(id,name,handle,avatar_url)').eq('user_id', P.id).order('created_at', { ascending: false }).limit(40);
-  const tx = { like: 'reagiu à sua publicação', comment: 'comentou na sua publicação', follow: 'começou a seguir você', reply: 'respondeu ao seu comentário' };
-  $('#v-notif').innerHTML = `<div class="max-w-xl mx-auto p-3 md:py-5"><h2 class="font-bold text-xl mb-3 px-1">Notificações</h2><div class="card divide-y divide-line overflow-hidden">` +
-    ((data || []).map(n => `<button class="w-full flex items-center gap-3 p-3 text-left ${n.read ? '' : 'bg-brand/10'}" onclick="showProfile('${n.actor.id}')">${av(n.actor, 46)}<div class="text-sm flex-1"><b>${E(n.actor.name)}</b> ${tx[n.type] || 'interagiu com você'}<div class="text-xs text-mut mt-0.5">${ago(n.created_at)}</div></div></button>`).join('') || '<p class="p-10 text-center text-sm text-mut">Nenhuma notificação por enquanto.</p>') + '</div></div>';
-  if ((data || []).some(n => !n.read)) { await sb.from('notifications').update({ read: true }).eq('user_id', P.id).eq('read', false); loadBadge() }
-}
 async function loadBadge() { const { count } = await sb.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', P.id).eq('read', false); document.querySelectorAll('.b-n').forEach(b => { b.textContent = count > 9 ? '9+' : count; b.classList.toggle('hidden', !count) }) }
 /* reels */
 async function loadReels() {
@@ -119,7 +109,7 @@ async function loadReels() {
 function reelH(p) {
   const mine = p.likes.find(l => l.user_id === P.id);
   return `<div class="snap-start h-full relative grid place-items-center"><video src="${E(p.media_url)}" loop playsinline muted class="h-full w-full object-contain" onclick="this.muted=false;this.paused?this.play():this.pause()"></video>
-  <div class="absolute bottom-5 left-4 right-20 text-white pointer-events-none"><button class="pointer-events-auto flex items-center gap-2 font-semibold text-sm" onclick="showProfile('${p.author.id}')">${av(p.author, 32)}@${E(p.author.handle)}</button><div class="text-sm opacity-90">${E(p.body)}</div></div>
+  <div class="absolute bottom-5 left-4 right-20 text-white pointer-events-none"><button class="pointer-events-auto flex items-center gap-2 font-semibold text-sm" onclick="showProfile('${p.author.id}')">${av(p.author, 32)}@${E(p.author.handle)}</button><div class="text-sm opacity-90">${linkify(p.body)}</div></div>
   <div class="absolute bottom-6 right-3 flex flex-col gap-4 text-white items-center text-xs">
    ${reelBtn(p)}
    <button onclick="share('${p.id}')">${ic('share', false, 26)}</button><button onclick="dlm('${E(p.media_url)}')">${ic('download', false, 26)}</button></div></div>`;
@@ -202,12 +192,12 @@ function postH(p) {
     const n = o.poll_votes.length, pc = tot ? Math.round(n * 100 / tot) : 0, me = o.poll_votes.some(v => v.user_id === P.id);
     return `<button onclick="vote('${p.id}','${o.id}')" class="relative w-full text-left rounded-lg overflow-hidden bg-soft px-3 py-2.5 text-sm ${me ? 'ring-1 ring-brand' : ''}"><div class="absolute inset-y-0 left-0 bg-brand/25 transition-all duration-500" style="width:${pc}%"></div><span class="relative">${E(o.label)}</span><span class="relative float-right text-mut">${pc}%</span></button>`
   }).join('')}<div class="text-xs text-mut">${tot} voto${tot === 1 ? '' : 's'}</div></div>` : '';
-  const o = p.orig ? `<div class="mx-4 mb-3 border border-line rounded-lg p-3 space-y-2 text-sm"><button class="text-xs font-semibold text-mut hover:underline" onclick="showProfile('${p.orig.author.id}')">${ic('repeat', false, 13)} ${E(p.orig.author.name || '')} @${E(p.orig.author.handle)}</button><div class="whitespace-pre-wrap break-words">${E(p.orig.body)}</div>${mediaH(p.orig.media_url, p.orig.media_type, 'rounded-lg max-h-72')}</div>` : '';
+  const o = p.orig ? `<div class="mx-4 mb-3 border border-line rounded-lg p-3 space-y-2 text-sm"><button class="text-xs font-semibold text-mut hover:underline" onclick="showProfile('${p.orig.author.id}')">${ic('repeat', false, 13)} ${E(p.orig.author.name || '')} @${E(p.orig.author.handle)}</button><div class="whitespace-pre-wrap break-words">${linkify(p.orig.body)}</div>${mediaH(p.orig.media_url, p.orig.media_type, 'rounded-lg max-h-72')}</div>` : '';
   const sum = rc || nc ? `<div class="flex items-center justify-between px-4 py-2 text-xs text-mut">${rc ? `<button class="flex items-center gap-1.5 hover:underline" onclick="showReactors('post','${p.id}')"><span class="flex -space-x-1">${types.map(t => `<span class="rounded-full ring-2 ring-card">${rx(t, 18)}</span>`).join('')}</span>${rc} reaç${rc > 1 ? 'ões' : 'ão'}</button>` : '<span></span>'}${nc ? `<button class="hover:underline" onclick="toggleC('${p.id}')">${nc} comentário${nc > 1 ? 's' : ''}</button>` : ''}</div>` : '';
   return `<article class="card overflow-hidden" id="p-${p.id}">
   <div class="flex items-center gap-3 px-4 pt-3 pb-2"><div class="cursor-pointer flex items-center gap-3 flex-1 min-w-0" onclick="showProfile('${a.id}')">${av(a, 42)}<div class="min-w-0"><div class="text-sm font-semibold truncate">${E(a.name)}</div><div class="text-xs text-mut">@${E(a.handle)} · ${ago(p.created_at)}${p.edited_at ? ' · editado' : ''}</div></div></div>
    <button class="circ !w-9 !h-9 !bg-transparent" onclick="postMenu('${p.id}')" aria-label="Mais opções">${ic('more', false, 20)}</button></div>
-  ${p.body ? `<p class="px-4 pb-3 text-[15px] leading-relaxed whitespace-pre-wrap break-words">${E(p.body)}</p>` : ''}${p.media_url ? `<div class="bg-black">${mediaH(p.media_url, p.media_type, 'w-full max-h-[32rem]')}</div>` : ''}${o}${poll}${sum}
+  ${p.body ? `<p class="px-4 pb-3 text-[15px] leading-relaxed whitespace-pre-wrap break-words">${linkify(p.body)}</p>` : ''}${p.media_url ? `<div class="bg-black">${mediaH(p.media_url, p.media_type, 'w-full max-h-[32rem]')}</div>` : ''}${o}${poll}${sum}
   <div class="grid grid-cols-3 gap-1 px-2 py-1 border-t border-line">
    <div class="rwrap relative" oncontextmenu="return false" ontouchstart="lp(this)" ontouchend="lpEnd()" ontouchmove="lpEnd()"><div class="rpick">${Object.keys(RX).map(k => `<button onclick="react('${p.id}','${k}')" title="${RX[k][0]}">${rx(k, 32)}</button>`).join('')}</div>
     <button class="act w-full ${mine ? 'hb' : ''}" style="${mine ? 'color:' + RX[mt][1] : ''}" onclick="mainReact(this,'${p.id}',${!!mine})">${mine ? rx(mt, 20) : ic('like', false, 20)}${mine ? RX[mt][0] : 'Curtir'}</button></div>
@@ -224,7 +214,6 @@ function postMenu(id) {
   else it.push([ic('flag') + ' Denunciar', async () => { await sb.from('reports').insert({ reporter: P.id, post_id: id, reason: 'denúncia' }); T('Denúncia enviada. Obrigado!') }]);
   menu('Opções da publicação', it);
 }
-async function save(id, on) { on ? await sb.from('saves').delete().match({ post_id: id, user_id: P.id }) : await sb.from('saves').insert({ post_id: id, user_id: P.id }); T(on ? 'Removido dos salvos' : 'Salvo 🔖'); refresh() }
 async function repost(id) { const v = await ask('Repostar na rede', ['Comentário (opcional)']); if (!v) return; await sb.from('posts').insert({ author: P.id, body: v[0], repost_of: id }); T('Repostado! 🔁'); refresh() }
 async function vote(pid, oid) { const { error } = await sb.from('poll_votes').upsert({ post_id: pid, user_id: P.id, option_id: oid }, { onConflict: 'post_id,user_id' }); if (error) T('Erro ao votar.'); refresh() }
 function share(id) {
@@ -269,7 +258,7 @@ async function publish() {
 /* ---------- PERFIL ---------- */
 async function openHandle(h) { const { data } = await sb.from('profiles').select('id').eq('handle', h).maybeSingle(); if (data) showProfile(data.id) }
 async function showProfile(id) { try { await _showProfile(id) } catch (e) { go('other'); $('#v-other').innerHTML = errH(e) } }
-async function _showProfile(id) { window.lastProfile = id;
+async function _showProfile(id) { window.lastProfile = id; window.reloadOther = null;
   go('other'); const [{ data: u }, { count: seg }, { count: sing }, { data: f }, { data: ps }] = await Promise.all([
     sb.from('profiles').select('*').eq('id', id).single(), sb.from('follows').select('*', { count: 'exact', head: true }).eq('followee', id),
     sb.from('follows').select('*', { count: 'exact', head: true }).eq('follower', id), sb.from('follows').select('follower').match({ follower: P.id, followee: id }),

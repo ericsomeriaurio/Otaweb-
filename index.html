@@ -57,6 +57,7 @@ body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:
    <div id="up-f" class="space-y-3 hidden"><input id="a-name" class="inp" placeholder="Nome de exibição" maxlength="30"><input id="a-handle" class="inp" placeholder="@usuario (a-z, 0-9, _)" maxlength="20"></div>
    <input id="a-email" type="email" class="inp" placeholder="E-mail" autocomplete="email">
    <input id="a-pass" type="password" class="inp" placeholder="Senha (mín. 6 caracteres)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuth()">
+   <button id="a-forgot" class="text-xs text-brand text-left font-semibold" onclick="forgot()">Esqueci minha senha</button>
    <div id="a-err" class="text-xs text-brand min-h-4"></div>
    <button id="a-go" class="btn w-full !py-3" onclick="doAuth()">Entrar</button>
   </div>
@@ -108,4 +109,5 @@ body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:
 <script src="app.js"></script>
 <script src="chat.js"></script>
 <script src="social.js"></script>
+<script src="extras.js"></script>
 </body></html>

@@ -13,7 +13,7 @@ function cPrev(m, c) {
 
 /* ---------- tempo real ---------- */
 function chatLive() {
-  if (CH.ch) return;
+  if (CH.ch) return; loadUnread();
   CH.ch = sb.channel('chat')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, onMsg)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'message_votes' }, () => { if (CH.open) loadMsgs() })
@@ -24,20 +24,19 @@ function chatLive() {
     const prev = PRES; PRES = new Set(Object.keys(CH.pr.presenceState()));
     prev.forEach(id => { if (!PRES.has(id)) CH.list.forEach(x => x.members.forEach(u => { if (u.id === id) u.last_seen = new Date().toISOString() })) });
     onlineUI();
-  }).subscribe(async st => { if (st === 'SUBSCRIBED') await CH.pr.track({ t: Date.now() }) });
+  }).subscribe(async st => { if (st === 'SUBSCRIBED' && P.show_status !== false) await CH.pr.track({ t: Date.now() }) });
   document.addEventListener('visibilitychange', markRead);
 }
 function onMsg(e) {
   const m = e.new || {}, viewing = !$('#v-msgs').classList.contains('hidden');
   if (e.eventType === 'INSERT' && m.sender !== P.id) markDelivered();
   if (CH.open && CH.open.id === m.chat_id && viewing) loadMsgs();
-  else if (e.eventType === 'INSERT' && m.sender !== P.id) $('#msg-dot').classList.remove('hidden');
+  else if (e.eventType === 'INSERT' && m.sender !== P.id) bumpUnread(m.chat_id);
   clearTimeout(CH.t); CH.t = setTimeout(() => { if (viewing && !CH.open) loadChats() }, 300);
 }
 
 /* ---------- lista de conversas ---------- */
 async function openMsgs() {
-  $('#msg-dot').classList.add('hidden');
   if (CH.open) { renderConv(); loadMsgs(); return }
   if (!CH.loaded) $('#v-msgs').innerHTML = '<div class="max-w-xl mx-auto p-3 space-y-3"><div class="sk h-16"></div><div class="sk h-16"></div><div class="sk h-16"></div></div>'; else renderChatList();
   await loadChats();
@@ -48,20 +47,24 @@ async function loadChats() {
   markDelivered(); const chats = (mem || []).map(m => m.chats).filter(Boolean), ids = chats.map(c => c.id); let mm = [], last = {};
   if (ids.length) {
     const [a, b] = await Promise.all([
-      sb.from('chat_members').select('chat_id,user_id,last_read_at,last_delivered_at,profiles!user_id(id,name,handle,avatar_url,last_seen)').in('chat_id', ids),
+      sb.from('chat_members').select('chat_id,user_id,last_read_at,last_delivered_at,profiles!user_id(id,name,handle,avatar_url,last_seen,show_status)').in('chat_id', ids),
       sb.from('messages').select('chat_id,sender,body,media_type,deleted_for_all,created_at,lat,poll_question').in('chat_id', ids).order('created_at', { ascending: false }).limit(300)]);
     mm = a.data || []; (b.data || []).forEach(m => { if (!last[m.chat_id]) last[m.chat_id] = m });
   }
   chats.forEach(c => { c.members = mm.filter(x => x.chat_id === c.id).map(x => x.profiles).filter(Boolean); c.last = last[c.id] || null; c.marks = {}; mm.filter(x => x.chat_id === c.id).forEach(x => c.marks[x.user_id] = { r: x.last_read_at, d: x.last_delivered_at }); c.other = c.is_group ? null : (c.members.find(u => u.id !== P.id) || c.members[0]) });
   chats.sort((a, b) => new Date((b.last || b).created_at) - new Date((a.last || a).created_at));
-  CH.list = chats; CH.loaded = true;
+  CH.list = chats; CH.loaded = true; await loadUnread();
   if (CH.open) { const f = chats.find(c => c.id === CH.open.id); if (f) CH.open = f } else renderChatList();
 }
 function renderChatList() {
+  const un = CH.unread || {};
   $('#v-msgs').innerHTML = `<div class="max-w-xl mx-auto p-3 md:py-5 space-y-3"><div class="flex items-center justify-between px-1"><h2 class="font-bold text-xl">Mensagens</h2>
   <div class="flex gap-2"><button class="btn2 !px-3" onclick="pickUsers(false)">${ic('plus', false, 16)}Conversa</button><button class="btn2 !px-3" onclick="pickUsers(true)">${ic('users', false, 16)}Grupo</button></div></div>
-  <div class="card overflow-hidden divide-y divide-line">` + (CH.list.map(c => `<button class="w-full flex items-center gap-3 p-3 text-left hover:bg-soft transition" onclick="openChat('${c.id}')">${cAv(c)}<div class="min-w-0 flex-1"><div class="flex justify-between gap-2"><span class="font-semibold text-sm truncate">${E(cName(c))}</span><span class="text-[11px] text-mut shrink-0">${c.last ? ago(c.last.created_at) : ''}</span></div><div class="text-xs text-mut truncate">${E(cPrev(c.last, c))}</div></div></button>`).join('') ||
-    '<p class="p-10 text-center text-sm text-mut">Nenhuma conversa ainda.<br>Toque em <b>Conversa</b> para falar com alguém.</p>') + '</div></div>';
+  <div class="card overflow-hidden divide-y divide-line">` + (CH.list.map(c => {
+    const n = un[c.id] || 0;
+    return `<button class="w-full flex items-center gap-3 p-3 text-left hover:bg-soft transition ${n ? 'bg-brand/5' : ''}" onclick="openChat('${c.id}')">${cAv(c)}<div class="min-w-0 flex-1"><div class="flex justify-between gap-2"><span class="${n ? 'font-bold' : 'font-semibold'} text-sm truncate">${E(cName(c))}</span><span class="text-[11px] shrink-0 ${n ? 'text-brand font-semibold' : 'text-mut'}">${c.last ? ago(c.last.created_at) : ''}</span></div>
+    <div class="flex items-center gap-2"><span class="text-xs truncate flex-1 ${n ? 'font-semibold text-ink' : 'text-mut'}">${E(cPrev(c.last, c))}</span>${n ? `<span class="shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-brand text-white text-[11px] font-bold grid place-items-center">${n > 99 ? '99+' : n}</span>` : ''}</div></div></button>`;
+  }).join('') || '<p class="p-10 text-center text-sm text-mut">Nenhuma conversa ainda.<br>Toque em <b>Conversa</b> para falar com alguém.</p>') + '</div></div>';
 }
 
 /* ---------- conversa aberta ---------- */
@@ -213,7 +216,7 @@ function markDelivered() { clearTimeout(CH.dt); CH.dt = setTimeout(() => sb.rpc(
 function markRead() {
   const c = CH.open; if (!c || document.visibilityState !== 'visible' || $('#v-msgs').classList.contains('hidden')) return;
   const last = CH.msgs.filter(m => m.sender !== P.id).pop(); CH.rd = CH.rd || {};
-  if (!last || CH.rd[c.id] === last.id) return; CH.rd[c.id] = last.id; sb.rpc('mark_read', { p_chat: c.id });
+  if (!last || CH.rd[c.id] === last.id) return; CH.rd[c.id] = last.id; sb.rpc('mark_read', { p_chat: c.id }); if (CH.unread) { CH.unread[c.id] = 0; paintUnread() }
 }
 async function refreshMarks() {
   const c = CH.open; if (!c) return;
@@ -232,7 +235,7 @@ function subHTML() {
   const c = CH.open; if (!c) return '';
   if (CH.typing && CH.typing.until > Date.now()) return `<span class="text-brand font-medium">${c.is_group ? E(CH.typing.name) + ' está digitando' : 'digitando'}...</span>`;
   if (c.is_group) { const on = c.members.filter(u => u.id !== P.id && PRES.has(u.id)).length; return c.members.length + ' membros' + (on ? ` · <span style="color:#22c55e">${on} online</span>` : '') }
-  const o = c.other; if (!o) return ''; if (PRES.has(o.id)) return '<span style="color:#22c55e" class="font-medium">online</span>';
+  const o = c.other; if (!o || o.show_status === false) return ''; if (PRES.has(o.id)) return '<span style="color:#22c55e" class="font-medium">online</span>';
   if (!o.last_seen) return 'offline'; const a = ago(o.last_seen); return a === 'agora' ? 'visto agora há pouco' : 'visto há ' + a;
 }
 function subUI() { const e = $('#csub'); if (e) e.innerHTML = subHTML() }
@@ -247,3 +250,14 @@ function typeChannel(on) {
   }).subscribe();
 }
 function sendTyping() { if (!CH.tc || Date.now() - (CH.tsent || 0) < 2000) return; CH.tsent = Date.now(); CH.tc.send({ type: 'broadcast', event: 'typing', payload: { u: P.id, n: P.name } }) }
+
+/* ---------- mensagens não lidas (número vermelho) ---------- */
+async function loadUnread() {
+  const { data } = await sb.rpc('unread_counts'); CH.unread = {}; (data || []).forEach(r => { CH.unread[r.chat_id] = Number(r.n) });
+  if (CH.open) CH.unread[CH.open.id] = 0; paintUnread(); if (!CH.open && !$('#v-msgs').classList.contains('hidden')) renderChatList();
+}
+function paintUnread() {
+  const n = Object.values(CH.unread || {}).reduce((a, b) => a + b, 0), b = $('#msg-dot'), t = n > 99 ? '99+' : String(n);
+  b.textContent = t; b.classList.toggle('hidden', !n); document.title = (n ? '(' + t + ') ' : '') + 'OtaWeb';
+}
+function bumpUnread(cid) { CH.unread = CH.unread || {}; CH.unread[cid] = (CH.unread[cid] || 0) + 1; paintUnread(); if (!CH.open && !$('#v-msgs').classList.contains('hidden')) renderChatList() }
