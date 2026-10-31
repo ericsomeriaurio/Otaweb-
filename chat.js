@@ -1,7 +1,8 @@
 /* OtaWeb · módulo de Mensagens (conversas privadas e grupos, tempo real) */
+let PRES = new Set();
 const CH = { list: [], open: null, msgs: [], votes: {}, pin: null, sel: [], users: {}, add: null, loaded: false, ch: null };
 const hhmm = t => new Date(t).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
-const cAv = (c, s = 46) => c.is_group ? `<div style="width:${s}px;height:${s}px" class="rounded-full bg-soft text-brand grid place-items-center shrink-0">${ic('users', false, Math.round(s * .45))}</div>` : av(c.other, s);
+const cAv = (c, s = 46) => c.is_group ? `<div style="width:${s}px;height:${s}px" class="rounded-full bg-soft text-brand grid place-items-center shrink-0">${ic('users', false, Math.round(s * .45))}</div>` : `<div class="relative shrink-0">${av(c.other, s)}${c.other && PRES.has(c.other.id) ? '<span class="absolute bottom-0 right-0 w-3 h-3 rounded-full" style="background:#22c55e;border:2px solid rgb(var(--card))"></span>' : ''}</div>`;
 const cName = c => c.is_group ? (c.name || 'Grupo') : (c.other ? c.other.name : 'Conversa');
 function cPrev(m, c) {
   if (!m) return 'Nenhuma mensagem ainda';
@@ -17,10 +18,18 @@ function chatLive() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, onMsg)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'message_votes' }, () => { if (CH.open) loadMsgs() })
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_members' }, () => { clearTimeout(CH.t2); CH.t2 = setTimeout(loadChats, 300) })
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_members' }, () => { clearTimeout(CH.t3); CH.t3 = setTimeout(refreshMarks, 250) })
     .subscribe();
+  CH.pr = sb.channel('online', { config: { presence: { key: P.id } } }).on('presence', { event: 'sync' }, () => {
+    const prev = PRES; PRES = new Set(Object.keys(CH.pr.presenceState()));
+    prev.forEach(id => { if (!PRES.has(id)) CH.list.forEach(x => x.members.forEach(u => { if (u.id === id) u.last_seen = new Date().toISOString() })) });
+    onlineUI();
+  }).subscribe(async st => { if (st === 'SUBSCRIBED') await CH.pr.track({ t: Date.now() }) });
+  document.addEventListener('visibilitychange', markRead);
 }
 function onMsg(e) {
   const m = e.new || {}, viewing = !$('#v-msgs').classList.contains('hidden');
+  if (e.eventType === 'INSERT' && m.sender !== P.id) markDelivered();
   if (CH.open && CH.open.id === m.chat_id && viewing) loadMsgs();
   else if (e.eventType === 'INSERT' && m.sender !== P.id) $('#msg-dot').classList.remove('hidden');
   clearTimeout(CH.t); CH.t = setTimeout(() => { if (viewing && !CH.open) loadChats() }, 300);
@@ -36,14 +45,14 @@ async function openMsgs() {
 async function loadChats() {
   const { data: mem, error } = await sb.from('chat_members').select('chat_id, chats!chat_id(id,is_group,name,avatar_url,created_by,pinned_message,created_at)').eq('user_id', P.id);
   if (error) { if (!CH.open) $('#v-msgs').innerHTML = errH(error); return }
-  const chats = (mem || []).map(m => m.chats).filter(Boolean), ids = chats.map(c => c.id); let mm = [], last = {};
+  markDelivered(); const chats = (mem || []).map(m => m.chats).filter(Boolean), ids = chats.map(c => c.id); let mm = [], last = {};
   if (ids.length) {
     const [a, b] = await Promise.all([
-      sb.from('chat_members').select('chat_id,user_id,profiles!user_id(id,name,handle,avatar_url)').in('chat_id', ids),
+      sb.from('chat_members').select('chat_id,user_id,last_read_at,last_delivered_at,profiles!user_id(id,name,handle,avatar_url,last_seen)').in('chat_id', ids),
       sb.from('messages').select('chat_id,sender,body,media_type,deleted_for_all,created_at,lat,poll_question').in('chat_id', ids).order('created_at', { ascending: false }).limit(300)]);
     mm = a.data || []; (b.data || []).forEach(m => { if (!last[m.chat_id]) last[m.chat_id] = m });
   }
-  chats.forEach(c => { c.members = mm.filter(x => x.chat_id === c.id).map(x => x.profiles).filter(Boolean); c.last = last[c.id] || null; c.other = c.is_group ? null : (c.members.find(u => u.id !== P.id) || c.members[0]) });
+  chats.forEach(c => { c.members = mm.filter(x => x.chat_id === c.id).map(x => x.profiles).filter(Boolean); c.last = last[c.id] || null; c.marks = {}; mm.filter(x => x.chat_id === c.id).forEach(x => c.marks[x.user_id] = { r: x.last_read_at, d: x.last_delivered_at }); c.other = c.is_group ? null : (c.members.find(u => u.id !== P.id) || c.members[0]) });
   chats.sort((a, b) => new Date((b.last || b).created_at) - new Date((a.last || a).created_at));
   CH.list = chats; CH.loaded = true;
   if (CH.open) { const f = chats.find(c => c.id === CH.open.id); if (f) CH.open = f } else renderChatList();
@@ -56,13 +65,12 @@ function renderChatList() {
 }
 
 /* ---------- conversa aberta ---------- */
-function openChat(id) { CH.open = CH.list.find(c => c.id === id); CH.msgs = []; CH.pin = null; renderConv(); loadMsgs() }
-function closeChat() { CH.open = null; renderChatList(); loadChats() }
+function openChat(id) { CH.open = CH.list.find(c => c.id === id); CH.msgs = []; CH.pin = null; CH.typing = null; renderConv(); typeChannel(true); loadMsgs() }
+function closeChat() { typeChannel(false); CH.open = null; renderChatList(); loadChats() }
 function renderConv() {
   const c = CH.open;
   $('#v-msgs').innerHTML = `<div class="h-full flex flex-col max-w-xl mx-auto bg-card md:border-x md:border-line">
-   <div class="shrink-0 flex items-center gap-2 p-2 border-b border-line"><button class="circ !bg-transparent" onclick="closeChat()" aria-label="Voltar">${ic('back', false, 20)}</button>${cAv(c, 38)}
-    <div class="min-w-0 flex-1"><div class="font-semibold text-sm truncate">${E(cName(c))}</div><div class="text-xs text-mut">${c.is_group ? c.members.length + ' membros' : '@' + E((c.other || {}).handle || '')}</div></div>
+   <div class="shrink-0 flex items-center gap-2 p-2 border-b border-line"><button class="circ !bg-transparent" onclick="closeChat()" aria-label="Voltar">${ic('back', false, 20)}</button><button class="flex items-center gap-2 min-w-0 flex-1 text-left" ${c.is_group ? '' : `onclick="goProfile('${(c.other || {}).id}')"`}><span id="chav">${cAv(c, 38)}</span><div class="min-w-0"><div class="font-semibold text-sm truncate">${E(cName(c))}</div><div id="csub" class="text-xs text-mut">${subHTML()}</div></div></button>
     <button class="circ !bg-transparent" onclick="chatMenu()" aria-label="Mais opções">${ic('more', false, 20)}</button></div>
    <button id="pinbar" onclick="pinMenu()" class="hidden shrink-0 flex items-center gap-2 px-3 py-2 text-xs bg-soft text-left border-b border-line"></button>
    <div id="cmsgs" class="flex-1 overflow-y-auto p-3 space-y-1.5"></div>
@@ -76,7 +84,7 @@ function renderConv() {
     <input id="cin" class="inp !rounded-full" placeholder="Mensagem" oninput="cdyn()" onkeydown="if(event.key==='Enter')csend()" autocomplete="off">
     <button id="csb" class="circ !bg-brand !text-white" onclick="csend()" aria-label="Enviar">${ic('heart', true, 20)}</button></div></div>`;
 }
-function cdyn() { $('#csb').innerHTML = $('#cin').value.trim() ? ic('send', false, 20) : ic('heart', true, 20) }
+function cdyn() { const t = $('#cin').value.trim(); $('#csb').innerHTML = t ? ic('send', false, 20) : ic('heart', true, 20); if (t) sendTyping() }
 async function loadMsgs() {
   const c = CH.open; if (!c) return;
   const { data, error } = await sb.from('messages').select('*').eq('chat_id', c.id).order('created_at').limit(300);
@@ -85,7 +93,7 @@ async function loadMsgs() {
   CH.msgs = data || []; const pids = CH.msgs.filter(m => m.poll_question).map(m => m.id); CH.votes = {};
   if (pids.length) { const { data: v } = await sb.from('message_votes').select('message_id,user_id,option_idx').in('message_id', pids); (v || []).forEach(x => (CH.votes[x.message_id] = CH.votes[x.message_id] || []).push(x)) }
   CH.pin = c.pinned_message ? CH.msgs.find(m => m.id === c.pinned_message) || null : null;
-  drawMsgs(!CH.drawn || CH.drawn !== c.id); CH.drawn = c.id;
+  drawMsgs(!CH.drawn || CH.drawn !== c.id); CH.drawn = c.id; CH.typing = null; subUI(); markRead();
 }
 function drawMsgs(bottom) {
   const el = $('#cmsgs'); if (!el) return;
@@ -104,9 +112,9 @@ function msgH(m, prev) {
   if (m.deleted_for_all) body = '<i class="text-mut">Mensagem apagada</i>';
   else if (heart) body = `<span class="text-brand">${ic('heart', true, 36)}</span>`;
   else body = (m.media_url ? mediaH(m.media_url, m.media_type, 'rounded-lg max-h-64 max-w-full') : '') + (m.lat != null ? `<a class="underline flex items-center gap-2" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${m.lat},${m.lng}">${ic('pin', false, 18)}Ver localização no mapa</a>` : '') + (m.poll_question ? pollM(m) : '') + (m.body ? `<div class="whitespace-pre-wrap break-words">${E(m.body)}</div>` : '');
-  return `<div class="flex ${mine ? 'justify-end' : 'justify-start'} gap-2 items-end">${g && !mine ? `<div class="w-7 shrink-0">${name ? av(u, 28) : ''}</div>` : ''}<div class="max-w-[78%]">${name ? `<div class="text-[11px] text-mut ml-1 mb-0.5">${E(u.name || 'Otaku')}</div>` : ''}
+  return `<div class="flex ${mine ? 'justify-end' : 'justify-start'} gap-2 items-end">${g && !mine ? `<div class="w-7 shrink-0">${name ? `<button onclick="goProfile('${u.id}')">${av(u, 28)}</button>` : ''}</div>` : ''}<div class="max-w-[78%]">${name ? `<button class="text-[11px] text-mut ml-1 mb-0.5 hover:underline" onclick="goProfile('${u.id}')">${E(u.name || 'Otaku')}</button>` : ''}
   <div onclick="msgMenu('${m.id}')" class="${heart ? '' : mine ? 'bg-brand text-white' : 'bg-soft'} rounded-2xl px-3 py-2 text-sm cursor-pointer space-y-1.5 w-fit ${mine ? 'ml-auto' : ''}">${body}</div>
-  <div class="text-[10px] text-mut mt-0.5 px-1 ${mine ? 'text-right' : ''}">${hhmm(m.created_at)}</div></div></div>`;
+  <div class="text-[10px] text-mut mt-0.5 px-1 flex items-center gap-1 ${mine ? 'justify-end' : ''}">${hhmm(m.created_at)}${m.edited_at && !m.deleted_for_all ? ' · editada' : ''}${mine && !m.deleted_for_all ? tick(m) : ''}</div></div></div>`;
 }
 function pollM(m) {
   const v = CH.votes[m.id] || [], tot = v.length;
@@ -140,6 +148,7 @@ function msgMenu(id) {
     if (m.body && m.body !== '__heart__') it.push([ic('link') + ' Copiar texto', () => copy(m.body)]);
     if (m.media_url) it.push([ic('download') + ' Baixar', () => dlm(m.media_url)]);
     it.push([ic('bookmark') + (pinned ? ' Desafixar' : ' Afixar no topo'), () => pinMsg(pinned ? null : id)]);
+    if (m.sender === P.id && m.body && m.body !== '__heart__' && !m.media_url && !m.poll_question && m.lat == null) it.push([ic('edit') + ' Editar', async () => { const v = await askText('Editar mensagem', m.body); if (!v) return; const { error } = await sb.from('messages').update({ body: v, edited_at: new Date().toISOString() }).eq('id', id); if (error) return T('Não editou: ' + error.message); loadMsgs() }]);
   }
   it.push([ic('trash') + ' Apagar para mim', async () => { const { error } = await sb.from('message_hidden').insert({ message_id: id, user_id: P.id }); if (error) return T('Não apagou: ' + error.message); CH.msgs = CH.msgs.filter(x => x.id !== id); drawMsgs() }]);
   if (m.sender === P.id && !m.deleted_for_all) it.push([ic('trash') + ' Apagar para todos', async () => { const { error } = await sb.from('messages').update({ deleted_for_all: true, body: null, media_url: null, media_type: null, lat: null, lng: null, poll_question: null, poll_options: null }).eq('id', id); if (error) return T('Não apagou: ' + error.message); loadMsgs() }]);
@@ -155,7 +164,7 @@ function chatMenu() {
 function showMembers() {
   modal(`<div class="flex items-center justify-between mb-3"><h3 class="font-bold text-lg">Membros</h3><button class="circ" onclick="closeM()">${ic('x', false, 18)}</button></div>` + CH.open.members.map(u => `<button class="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-soft text-left" onclick="closeM();go('other');showProfile('${u.id}')">${av(u, 40)}<div><div class="text-sm font-semibold">${E(u.name)}</div><div class="text-xs text-mut">@${E(u.handle)}</div></div></button>`).join(''));
 }
-async function leaveChat() { const { error } = await sb.from('chat_members').delete().match({ chat_id: CH.open.id, user_id: P.id }); if (error) return T('Não saiu: ' + error.message); CH.open = null; await loadChats(); renderChatList() }
+async function leaveChat() { const { error } = await sb.from('chat_members').delete().match({ chat_id: CH.open.id, user_id: P.id }); if (error) return T('Não saiu: ' + error.message); typeChannel(false); CH.open = null; await loadChats(); renderChatList() }
 
 /* ---------- nova conversa / grupo ---------- */
 function pickUsers(group, add) {
@@ -174,12 +183,7 @@ async function uSearch(group) {
   $('#usel').innerHTML = CH.sel.map(id => `<span class="text-xs bg-soft rounded-full px-2.5 py-1">${E(CH.users[id].name)}</span>`).join('');
 }
 function togUser(id) { CH.sel = CH.sel.includes(id) ? CH.sel.filter(x => x !== id) : [...CH.sel, id]; uSearch(true) }
-async function dmWith(id) {
-  closeM(); const ex = CH.list.find(c => !c.is_group && c.members.some(m => m.id === id)); if (ex) return openChat(ex.id);
-  const { data: c, error } = await sb.from('chats').insert({ is_group: false, created_by: P.id }).select().single(); if (error) return T('Não criou a conversa: ' + error.message);
-  const { error: e2 } = await sb.from('chat_members').insert([{ chat_id: c.id, user_id: P.id, role: 'owner' }, { chat_id: c.id, user_id: id }]); if (e2) return T('Não adicionou: ' + e2.message);
-  await loadChats(); openChat(c.id);
-}
+async function dmWith(id) { closeM(); startDM(id) }
 async function mkGroup() {
   if (CH.add) {
     const novos = CH.sel.filter(id => !CH.add.members.some(m => m.id === id)); if (!novos.length) return T('Escolha alguém que ainda não está no grupo.');
@@ -191,3 +195,55 @@ async function mkGroup() {
   const { error: e2 } = await sb.from('chat_members').insert([{ chat_id: c.id, user_id: P.id, role: 'owner' }, ...CH.sel.map(id => ({ chat_id: c.id, user_id: id }))]); if (e2) return T('Não adicionou: ' + e2.message);
   closeM(); await loadChats(); openChat(c.id);
 }
+
+/* ---------- iniciar conversa a partir do perfil ---------- */
+async function startDM(id) {
+  if (!CH.loaded) await loadChats();
+  let c = CH.list.find(x => !x.is_group && x.members.some(m => m.id === id));
+  if (!c) {
+    const { data, error } = await sb.from('chats').insert({ is_group: false, created_by: P.id }).select().single(); if (error) return T('Não criou a conversa: ' + error.message);
+    const { error: e2 } = await sb.from('chat_members').insert([{ chat_id: data.id, user_id: P.id, role: 'owner' }, { chat_id: data.id, user_id: id }]); if (e2) return T('Não adicionou: ' + e2.message);
+    await loadChats(); c = CH.list.find(x => x.id === data.id);
+  }
+  go('msgs'); if (c) openChat(c.id);
+}
+
+/* ---------- visto / recebido ---------- */
+function markDelivered() { clearTimeout(CH.dt); CH.dt = setTimeout(() => sb.rpc('mark_delivered'), 400) }
+function markRead() {
+  const c = CH.open; if (!c || document.visibilityState !== 'visible' || $('#v-msgs').classList.contains('hidden')) return;
+  const last = CH.msgs.filter(m => m.sender !== P.id).pop(); CH.rd = CH.rd || {};
+  if (!last || CH.rd[c.id] === last.id) return; CH.rd[c.id] = last.id; sb.rpc('mark_read', { p_chat: c.id });
+}
+async function refreshMarks() {
+  const c = CH.open; if (!c) return;
+  const { data } = await sb.from('chat_members').select('user_id,last_read_at,last_delivered_at').eq('chat_id', c.id); c.marks = {};
+  (data || []).forEach(x => c.marks[x.user_id] = { r: x.last_read_at, d: x.last_delivered_at }); drawMsgs();
+}
+function tick(m) {
+  const c = CH.open, others = c.members.filter(u => u.id !== P.id); if (!others.length) return '';
+  const t = new Date(m.created_at), mk = u => (c.marks || {})[u.id] || {};
+  const read = others.every(u => mk(u).r && new Date(mk(u).r) >= t), del = others.every(u => mk(u).d && new Date(mk(u).d) >= t);
+  return read ? `<span style="color:#38bdf8" title="Visto">${ic('checks', false, 15)}</span>` : del ? `<span title="Recebida">${ic('checks', false, 15)}</span>` : `<span title="Enviada">${ic('check', false, 15)}</span>`;
+}
+
+/* ---------- online, visto por último e "digitando" ---------- */
+function subHTML() {
+  const c = CH.open; if (!c) return '';
+  if (CH.typing && CH.typing.until > Date.now()) return `<span class="text-brand font-medium">${c.is_group ? E(CH.typing.name) + ' está digitando' : 'digitando'}...</span>`;
+  if (c.is_group) { const on = c.members.filter(u => u.id !== P.id && PRES.has(u.id)).length; return c.members.length + ' membros' + (on ? ` · <span style="color:#22c55e">${on} online</span>` : '') }
+  const o = c.other; if (!o) return ''; if (PRES.has(o.id)) return '<span style="color:#22c55e" class="font-medium">online</span>';
+  if (!o.last_seen) return 'offline'; const a = ago(o.last_seen); return a === 'agora' ? 'visto agora há pouco' : 'visto há ' + a;
+}
+function subUI() { const e = $('#csub'); if (e) e.innerHTML = subHTML() }
+function onlineUI() {
+  if (CH.open) { subUI(); const a = $('#chav'); if (a) a.innerHTML = cAv(CH.open, 38) }
+  else if (CH.loaded && !$('#v-msgs').classList.contains('hidden')) renderChatList();
+}
+function typeChannel(on) {
+  if (CH.tc) { sb.removeChannel(CH.tc); CH.tc = null } if (!on || !CH.open) return;
+  CH.tc = sb.channel('typing:' + CH.open.id, { config: { broadcast: { self: false } } }).on('broadcast', { event: 'typing' }, ({ payload }) => {
+    if (!payload || payload.u === P.id) return; CH.typing = { u: payload.u, name: payload.n, until: Date.now() + 3500 }; subUI(); setTimeout(subUI, 3700);
+  }).subscribe();
+}
+function sendTyping() { if (!CH.tc || Date.now() - (CH.tsent || 0) < 2000) return; CH.tsent = Date.now(); CH.tc.send({ type: 'broadcast', event: 'typing', payload: { u: P.id, n: P.name } }) }
