@@ -187,12 +187,12 @@ async function dmWith(id) { closeM(); startDM(id) }
 async function mkGroup() {
   if (CH.add) {
     const novos = CH.sel.filter(id => !CH.add.members.some(m => m.id === id)); if (!novos.length) return T('Escolha alguém que ainda não está no grupo.');
-    const { error } = await sb.from('chat_members').insert(novos.map(id => ({ chat_id: CH.add.id, user_id: id }))); if (error) return T('Não adicionou: ' + error.message);
+    const { error } = await sb.from('chat_members').insert(novos.map(id => ({ chat_id: CH.add.id, user_id: id, role: 'member' }))); if (error) return T('Não adicionou: ' + error.message);
     closeM(); await loadChats(); renderConv(); return loadMsgs();
   }
   const name = $('#gname').value.trim(); if (!name) return T('Dê um nome ao grupo.'); if (!CH.sel.length) return T('Escolha pelo menos uma pessoa.');
   const { data: c, error } = await sb.from('chats').insert({ is_group: true, name, created_by: P.id }).select().single(); if (error) return T('Não criou o grupo: ' + error.message);
-  const { error: e2 } = await sb.from('chat_members').insert([{ chat_id: c.id, user_id: P.id, role: 'owner' }, ...CH.sel.map(id => ({ chat_id: c.id, user_id: id }))]); if (e2) return T('Não adicionou: ' + e2.message);
+  const { error: e2 } = await sb.from('chat_members').insert([{ chat_id: c.id, user_id: P.id, role: 'owner' }, ...CH.sel.map(id => ({ chat_id: c.id, user_id: id, role: 'member' }))]); if (e2) return T('Não adicionou: ' + e2.message);
   closeM(); await loadChats(); openChat(c.id);
 }
 
@@ -202,7 +202,7 @@ async function startDM(id) {
   let c = CH.list.find(x => !x.is_group && x.members.some(m => m.id === id));
   if (!c) {
     const { data, error } = await sb.from('chats').insert({ is_group: false, created_by: P.id }).select().single(); if (error) return T('Não criou a conversa: ' + error.message);
-    const { error: e2 } = await sb.from('chat_members').insert([{ chat_id: data.id, user_id: P.id, role: 'owner' }, { chat_id: data.id, user_id: id }]); if (e2) return T('Não adicionou: ' + e2.message);
+    const { error: e2 } = await sb.from('chat_members').insert([{ chat_id: data.id, user_id: P.id, role: 'owner' }, { chat_id: data.id, user_id: id, role: 'member' }]); if (e2) return T('Não adicionou: ' + e2.message);
     await loadChats(); c = CH.list.find(x => x.id === data.id);
   }
   go('msgs'); if (c) openChat(c.id);
