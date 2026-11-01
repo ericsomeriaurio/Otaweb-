@@ -2,10 +2,11 @@
 let PRES = new Set();
 const CH = { list: [], open: null, msgs: [], votes: {}, pin: null, sel: [], users: {}, add: null, loaded: false, ch: null };
 const hhmm = t => new Date(t).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
-const cAv = (c, s = 46) => c.is_group ? (c.avatar_url ? `<img src="${E(c.avatar_url)}" style="width:${s}px;height:${s}px" class="rounded-full object-cover shrink-0">` : `<div style="width:${s}px;height:${s}px" class="rounded-full bg-soft text-brand grid place-items-center shrink-0">${ic('users', false, Math.round(s * .45))}</div>`) : `<div class="relative shrink-0">${av(c.other, s)}${c.other && PRES.has(c.other.id) ? '<span class="absolute bottom-0 right-0 w-3 h-3 rounded-full" style="background:#22c55e;border:2px solid rgb(var(--card))"></span>' : ''}</div>`;
+const cAv = (c, s = 46) => c.is_group ? (c.avatar_url ? `<img src="${E(c.avatar_url)}" style="width:${s}px;height:${s}px" class="rounded-full object-cover shrink-0">` : `<div style="width:${s}px;height:${s}px" class="rounded-full bg-soft text-brand grid place-items-center shrink-0">${ic('users', false, Math.round(s * .45))}</div>`) : `<div class="relative shrink-0">${av(c.other, s)}${c.other && PRES.has(c.other.id) && !(typeof BLK !== 'undefined' && (BLK.has(c.other.id) || BLK_ME.has(c.other.id))) ? '<span class="absolute bottom-0 right-0 w-3 h-3 rounded-full" style="background:#22c55e;border:2px solid rgb(var(--card))"></span>' : ''}</div>`;
 const cName = c => c.is_group ? (c.name || 'Grupo') : (c.other ? c.other.name : 'Conversa');
 function cPrev(m, c) {
   if (!m) return 'Nenhuma mensagem ainda';
+  if (m.sys) return sysText(m);
   const me = m.sender === P.id ? 'Você: ' : (c && c.is_group ? ((c.members.find(u => u.id === m.sender) || {}).name || 'Alguém') + ': ' : '');
   const t = m.deleted_for_all ? 'Mensagem apagada' : m.body === '__heart__' ? 'Coração' : m.poll_question ? 'Enquete: ' + m.poll_question : m.lat != null ? 'Localização' : m.media_type === 'image' ? 'Foto' : m.media_type === 'video' ? 'Vídeo' : m.media_type === 'audio' ? 'Áudio' : (m.body || '');
   return me + t;
@@ -31,7 +32,7 @@ function onMsg(e) {
   const m = e.new || {}, viewing = !$('#v-msgs').classList.contains('hidden');
   if (e.eventType === 'INSERT' && m.sender !== P.id) markDelivered();
   if (CH.open && CH.open.id === m.chat_id && viewing) loadMsgs();
-  else if (e.eventType === 'INSERT' && m.sender !== P.id) bumpUnread(m.chat_id);
+  else if (e.eventType === 'INSERT' && m.sender !== P.id && !m.sys) bumpUnread(m.chat_id);
   clearTimeout(CH.t); CH.t = setTimeout(() => { if (viewing && !CH.open) loadChats() }, 300);
 }
 
@@ -48,7 +49,7 @@ async function loadChats() {
   if (ids.length) {
     const [a, b] = await Promise.all([
       sb.from('chat_members').select('chat_id,user_id,last_read_at,last_delivered_at,role,profiles!user_id(id,name,handle,avatar_url,last_seen,show_status)').in('chat_id', ids),
-      sb.from('messages').select('chat_id,sender,body,media_type,deleted_for_all,created_at,lat,poll_question').in('chat_id', ids).order('created_at', { ascending: false }).limit(300)]);
+      sb.from('messages').select('chat_id,sender,body,media_type,deleted_for_all,created_at,lat,poll_question,sys').in('chat_id', ids).order('created_at', { ascending: false }).limit(300)]);
     mm = a.data || []; (b.data || []).forEach(m => { if (!last[m.chat_id]) last[m.chat_id] = m });
   }
   chats.forEach(c => { c.roles = {}; mm.filter(x => x.chat_id === c.id).forEach(x => { c.roles[x.user_id] = x.role }); c.members = mm.filter(x => x.chat_id === c.id).map(x => x.profiles).filter(Boolean); c.last = last[c.id] || null; c.marks = {}; mm.filter(x => x.chat_id === c.id).forEach(x => c.marks[x.user_id] = { r: x.last_read_at, d: x.last_delivered_at }); c.other = c.is_group ? null : (c.members.find(u => u.id !== P.id) || c.members[0]) });
@@ -68,7 +69,7 @@ function renderChatList() {
 }
 
 /* ---------- conversa aberta ---------- */
-function openChat(id) { CH.reply = null; CH.open = CH.list.find(c => c.id === id); CH.msgs = []; CH.pin = null; CH.typing = null; renderConv(); typeChannel(true); loadMsgs() }
+function openChat(id) { CH.reply = null; CH.open = CH.list.find(c => c.id === id); CH.msgs = []; CH.pin = null; CH.typing = null; renderConv(); typeChannel(true); loadMsgs(); if (typeof refreshBlocks === 'function') refreshBlocks() }
 function closeChat() { typeChannel(false); CH.open = null; renderChatList(); loadChats() }
 function renderConv() {
   const c = CH.open;
@@ -113,7 +114,8 @@ function drawMsgs(bottom) {
   if (near) el.scrollTop = el.scrollHeight;
 }
 function msgH(m, prev) {
-  const mine = m.sender === P.id, g = CH.open.is_group, u = CH.open.members.find(x => x.id === m.sender) || {}, name = g && !mine && (!prev || prev.sender !== m.sender), heart = m.body === '__heart__' && !m.deleted_for_all; let body;
+  if (m.sys) return sysH(m);
+  const mine = m.sender === P.id, g = CH.open.is_group, u = CH.open.members.find(x => x.id === m.sender) || {}, name = g && !mine && (!prev || prev.sys || prev.sender !== m.sender), heart = m.body === '__heart__' && !m.deleted_for_all; let body;
   if (m.deleted_for_all) body = '<i class="text-mut">Mensagem apagada</i>';
   else if (heart) body = `<span class="text-brand">${ic('heart', true, 36)}</span>`;
   else body = (m.media_url ? mediaH(m.media_url, m.media_type, 'rounded-lg max-h-64 max-w-full') : '') + (m.lat != null ? `<a class="underline flex items-center gap-2" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${m.lat},${m.lng}">${ic('pin', false, 18)}Ver localização no mapa</a>` : '') + (m.poll_question ? pollM(m) : '') + (m.body ? `<div class="whitespace-pre-wrap break-words">${E(m.body)}</div>` : '');
@@ -135,7 +137,7 @@ async function csend(extra) {
   const row = { chat_id: CH.open.id, sender: P.id, ...(extra || { body: t || '__heart__' }), ...(CH.reply ? { reply_to: CH.reply.id } : {}) }; replyOff();
   i.value = ''; cdyn(); $('#cattach').classList.add('hidden');
   const { data, error } = await sb.from('messages').insert(row).select().single();
-  if (error) return T(error.code === '42501' ? 'Não foi possível enviar esta mensagem.' : 'Não enviou: ' + error.message);
+  if (error) { if (error.code === '42501') { T('Não foi possível enviar esta mensagem.'); if (typeof refreshBlocks === 'function') refreshBlocks(true) } else T('Não enviou: ' + error.message); return }
   CH.msgs.push(data); drawMsgs(true);
 }
 async function sendFile(f) { if (!f) return; T('Enviando...'); const m = await upload(f); if (m) csend({ media_url: m.url, media_type: m.type }) }
@@ -214,6 +216,7 @@ function tick(m) {
 /* ---------- online, visto por último e "digitando" ---------- */
 function subHTML() {
   const c = CH.open; if (!c) return '';
+  if (!c.is_group && c.other && typeof BLK !== 'undefined') { if (BLK.has(c.other.id)) return '<span class="text-mut">Contato bloqueado</span>'; if (BLK_ME.has(c.other.id)) return '<span class="text-mut">Usuário indisponível</span>' }
   if (CH.typing && CH.typing.until > Date.now()) return `<span class="text-brand font-medium">${c.is_group ? E(CH.typing.name) + ' está digitando' : 'digitando'}...</span>`;
   if (c.is_group) { const on = c.members.filter(u => u.id !== P.id && PRES.has(u.id)).length; return c.members.length + ' membros' + (on ? ` · <span style="color:#22c55e">${on} online</span>` : '') }
   const o = c.other; if (!o || o.show_status === false) return ''; if (PRES.has(o.id)) return '<span style="color:#22c55e" class="font-medium">online</span>';

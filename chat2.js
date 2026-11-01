@@ -1,12 +1,12 @@
 /* OtaWeb · chat avançado: responder/reagir, painel de contato, bloquear, grupos com cargos */
 CH.mr = {}; CH.reply = null;
-let BLK = new Set();
+let BLK = new Set(), BLK_ME = new Set();
 
-const msgText = m => m.deleted_for_all ? 'Mensagem apagada' : m.body === '__heart__' ? 'Coração' : m.poll_question ? 'Enquete: ' + m.poll_question : m.lat != null ? 'Localização' : m.media_type === 'image' ? 'Foto' : m.media_type === 'video' ? 'Vídeo' : m.media_type === 'audio' ? 'Áudio' : (m.body || '');
+const msgText = m => m.sys ? sysText(m) : m.deleted_for_all ? 'Mensagem apagada' : m.body === '__heart__' ? 'Coração' : m.poll_question ? 'Enquete: ' + m.poll_question : m.lat != null ? 'Localização' : m.media_type === 'image' ? 'Foto' : m.media_type === 'video' ? 'Vídeo' : m.media_type === 'audio' ? 'Áudio' : (m.body || '');
 const nameOf = id => id === P.id ? 'Você' : ((CH.open && CH.open.members.find(u => u.id === id)) || {}).name || 'Alguém';
 
 function chat2Start() {
-  loadBlocks();
+  loadBlocks(); setTimeout(() => { if (!/composerState/.test(String(renderConv))) T('Atenção: o chat.js do site está desatualizado. Envie o chat.js novo e recarregue a página.') }, 4000);
   const refresh = () => { clearTimeout(CH.t4); CH.t4 = setTimeout(() => { loadChats(); if ($('#modal') && !$('#modal').classList.contains('hidden') && CH.infoOpen) setTimeout(openInfo, 400) }, 300) };
   sb.channel('chat2')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'message_reactions' }, () => { if (CH.open && !$('#v-msgs').classList.contains('hidden')) loadMsgs() })
@@ -15,7 +15,14 @@ function chat2Start() {
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chats' }, e => { const n = e.new || {}, c = CH.list.find(x => x.id === n.id); if (c && (c.name !== n.name || c.avatar_url !== n.avatar_url)) refresh() })
     .subscribe();
 }
-async function loadBlocks() { const { data } = await sb.from('blocks').select('blocked').eq('blocker', P.id); BLK = new Set((data || []).map(x => x.blocked)) }
+async function loadBlocks() {
+  const [a, b] = await Promise.all([sb.from('blocks').select('blocked').eq('blocker', P.id), sb.rpc('who_blocked_me')]);
+  BLK = new Set((a.data || []).map(x => x.blocked)); BLK_ME = new Set((b.data || []).map(x => x.blocker));
+}
+async function refreshBlocks(force) {
+  const k = () => [...BLK].sort().join() + '|' + [...BLK_ME].sort().join(), antes = k(); await loadBlocks();
+  if ((force || antes !== k()) && CH.open) { renderConv(); loadMsgs() }
+}
 
 /* ---------- resposta e reação dentro da conversa ---------- */
 function quoteH(m) {
@@ -81,7 +88,7 @@ function openInfo() {
   let h = `<div class="flex justify-end -mt-2 -mr-2"><button class="circ" onclick="CH.infoOpen=false;closeM()" aria-label="Fechar">${ic('x', false, 18)}</button></div><div class="max-h-[78dvh] overflow-y-auto -mt-4">`;
   if (c.is_group) {
     h += `<div class="relative mx-auto w-24 h-24">${cAv(c, 96)}${adm ? `<label class="absolute -bottom-1 -right-1 circ !w-9 !h-9 !bg-brand !text-white cursor-pointer" aria-label="Trocar foto do grupo">${ic('camera', false, 16)}<input type="file" accept="image/*" class="hidden" onchange="setGroupPhoto(this.files[0])"></label>` : ''}</div>
-    <div class="text-center mt-3 mb-3"><div class="font-bold text-lg">${E(c.name || 'Grupo')}</div><div class="text-xs text-mut">${c.members.length} membro${c.members.length > 1 ? 's' : ''}</div>${adm ? '<button class="text-xs text-brand font-semibold mt-1" onclick="renameGroup()">Mudar nome</button>' : ''}</div>`;
+    <div class="text-center mt-3 mb-3"><div class="font-bold text-lg">${E(c.name || 'Grupo')}</div><div class="text-xs text-mut">${c.members.length} membro${c.members.length > 1 ? 's' : ''}</div>${adm ? '<button class="text-xs text-brand font-semibold mt-1" onclick="renameGroup()">Mudar nome</button>' : ''}${adm && c.avatar_url ? '<button class="text-xs text-mut font-semibold mt-1 ml-4" onclick="removeGroupPhoto()">Remover foto</button>' : ''}</div>`;
     if (adm) h += irow('plus', 'Adicionar pessoas', 'addMemberModal()');
     h += '<div class="text-xs font-semibold text-mut px-3 pt-3 pb-1">MEMBROS</div>' + c.members.map(u => `<button class="w-full flex items-center gap-3 p-2 px-3 rounded-lg hover:bg-soft text-left" onclick="memberMenu('${u.id}')">${av(u, 40)}<span class="min-w-0 flex-1"><span class="block text-sm font-semibold truncate">${E(u.name)}${u.id === P.id ? ' (você)' : ''}</span><span class="block text-xs text-mut">@${E(u.handle)}</span></span>${badge(roles[u.id])}</button>`).join('');
     h += '<div class="h-2"></div>' + irow('logout', 'Sair do grupo', 'leaveChat()', true) + irow('flag', 'Denunciar grupo', 'reportChat()', true) + (me === 'owner' ? irow('trash', 'Excluir grupo', 'deleteGroup()', true) : '');
@@ -93,7 +100,7 @@ function openInfo() {
   modal(h + '</div>');
 }
 function memberMenu(id) {
-  const c = CH.open, u = c.members.find(x => x.id === id); if (!u) return; const me = c.roles[P.id], tr = c.roles[id], it = [[ic('user') + ' Ver perfil', () => goProfile(id)]];
+  const c = CH.open, u = c.members.find(x => x.id === id); if (!u) return; const me = (c.roles || {})[P.id], tr = (c.roles || {})[id], it = [[ic('user') + ' Ver perfil', () => goProfile(id)]];
   if (id !== P.id) it.push([ic('msgc') + ' Enviar mensagem', () => startDM(id)]);
   if (me === 'owner' && id !== P.id) { it.push([ic('star') + (tr === 'admin' ? ' Remover cargo de admin' : ' Tornar admin'), () => setRole(id, tr === 'admin' ? 'member' : 'admin')]); it.push([ic('star', true) + ' Transferir liderança', () => transferOwner(id)]) }
   if (id !== P.id && tr !== 'owner' && (me === 'owner' || (me === 'admin' && tr === 'member'))) it.push([ic('trash') + ' Remover do grupo', () => kick(id)]);
@@ -157,6 +164,33 @@ async function sendReport(reason) {
   if (error) return T(/reported_user|chat_id/.test(error.message) ? 'Falta rodar a migração 5 no Supabase.' : 'Não enviou: ' + error.message); T('Denúncia enviada. Obrigado!');
 }
 function composerState() {
-  const c = CH.open; if (!c || c.is_group || !c.other || !BLK.has(c.other.id)) return; const i = $('#cin'); if (!i) return;
-  i.closest('.shrink-0').innerHTML = `<div class="flex-1 text-center text-sm text-mut py-2">Você bloqueou este contato. <button class="text-brand font-semibold" onclick="unblock('${c.other.id}')">Desbloquear</button></div>`;
+  const c = CH.open; if (!c || c.is_group || !c.other) return; const i = $('#cin'); if (!i) return;
+  const porMim = BLK.has(c.other.id), porEle = BLK_ME.has(c.other.id); if (!porMim && !porEle) return;
+  ['cattach', 'crep'].forEach(id => { const e = document.getElementById(id); if (e) e.remove() });
+  i.closest('.shrink-0').innerHTML = porMim
+    ? `<div class="flex-1 text-center py-1"><div class="text-sm text-mut mb-2">Você bloqueou este contato.</div><button class="btn" onclick="unblock('${c.other.id}')">Desbloquear</button></div>`
+    : '<div class="flex-1 text-center text-sm text-mut py-3">Usuário indisponível. Não é possível enviar mensagens.</div>';
 }
+async function removeGroupPhoto() {
+  const { error } = await sb.from('chats').update({ avatar_url: null }).eq('id', CH.open.id); if (error) return T('Não removeu a foto: ' + error.message);
+  await loadChats(); const a = $('#chav'); if (a) a.innerHTML = cAv(CH.open, 38); openInfo(); T('Foto do grupo removida.');
+}
+
+/* ---------- avisos do grupo (criados pelo banco) ---------- */
+function sysText(m) {
+  const s = m.sys || {}, eu = id => id === P.id, A = eu(s.a) ? 'Você' : (s.an || 'Alguém'), U = s.un || 'Alguém';
+  switch (s.t) {
+    case 'created': return A + ' criou o grupo';
+    case 'added': return eu(s.u) ? A + ' adicionou você' : A + ' adicionou ' + U;
+    case 'removed': return eu(s.u) ? A + ' removeu você' : A + ' removeu ' + U;
+    case 'left': return (eu(s.u) ? 'Você' : U) + ' saiu do grupo';
+    case 'admin': return (eu(s.u) ? 'Você' : U) + ' agora é administrador';
+    case 'unadmin': return (eu(s.u) ? 'Você' : U) + ' deixou de ser administrador';
+    case 'owner': return (eu(s.u) ? 'Você' : U) + ' agora é o dono do grupo';
+    case 'renamed': return A + ' mudou o nome do grupo para \u201c' + (s.name || '') + '\u201d';
+    case 'photo': return A + ' mudou a foto do grupo';
+    case 'photo_removed': return A + ' removeu a foto do grupo';
+  }
+  return 'Atualização do grupo';
+}
+const sysH = m => `<div class="flex justify-center py-1"><span class="text-[11px] text-mut bg-soft rounded-full px-3 py-1 text-center max-w-[85%]">${E(sysText(m))}</span></div>`;
