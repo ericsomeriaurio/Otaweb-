@@ -52,7 +52,7 @@ async function loadChats() {
       sb.from('messages').select('chat_id,sender,body,media_type,deleted_for_all,created_at,lat,poll_question,sys').in('chat_id', ids).order('created_at', { ascending: false }).limit(300)]);
     mm = a.data || []; (b.data || []).forEach(m => { if (!last[m.chat_id]) last[m.chat_id] = m });
   }
-  chats.forEach(c => { c.roles = {}; mm.filter(x => x.chat_id === c.id).forEach(x => { c.roles[x.user_id] = x.role }); c.members = mm.filter(x => x.chat_id === c.id).map(x => x.profiles).filter(Boolean); c.last = last[c.id] || null; c.marks = {}; mm.filter(x => x.chat_id === c.id).forEach(x => c.marks[x.user_id] = { r: x.last_read_at, d: x.last_delivered_at }); c.other = c.is_group ? null : (c.members.find(u => u.id !== P.id) || c.members[0]) });
+  chats.forEach(c => { c.myRead = ((mm.find(x => x.chat_id === c.id && x.user_id === P.id)) || {}).last_read_at || null; c.roles = {}; mm.filter(x => x.chat_id === c.id).forEach(x => { c.roles[x.user_id] = x.role }); c.members = mm.filter(x => x.chat_id === c.id).map(x => x.profiles).filter(Boolean); c.last = last[c.id] || null; c.marks = {}; mm.filter(x => x.chat_id === c.id).forEach(x => c.marks[x.user_id] = { r: x.last_read_at, d: x.last_delivered_at }); c.other = c.is_group ? null : (c.members.find(u => u.id !== P.id) || c.members[0]) });
   chats.sort((a, b) => new Date((b.last || b).created_at) - new Date((a.last || a).created_at));
   CH.list = chats; CH.loaded = true; await loadUnread();
   if (CH.open) { const f = chats.find(c => c.id === CH.open.id); if (f) CH.open = f; else { CH.open = null; CH.infoOpen = false; closeM(); typeChannel(false); renderChatList(); T('Você não está mais nesta conversa.') } } else renderChatList();
@@ -64,12 +64,12 @@ function renderChatList() {
   <div class="card overflow-hidden divide-y divide-line">` + (CH.list.map(c => {
     const n = un[c.id] || 0;
     return `<button class="w-full flex items-center gap-3 p-3 text-left hover:bg-soft transition ${n ? 'bg-brand/5' : ''}" onclick="openChat('${c.id}')">${cAv(c)}<div class="min-w-0 flex-1"><div class="flex justify-between gap-2"><span class="${n ? 'font-bold' : 'font-semibold'} text-sm truncate">${E(cName(c))}</span><span class="text-[11px] shrink-0 ${n ? 'text-brand font-semibold' : 'text-mut'}">${c.last ? ago(c.last.created_at) : ''}</span></div>
-    <div class="flex items-center gap-2"><span class="text-xs truncate flex-1 ${n ? 'font-semibold text-ink' : 'text-mut'}">${E(cPrev(c.last, c))}</span>${n ? `<span class="shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-brand text-white text-[11px] font-bold grid place-items-center">${n > 99 ? '99+' : n}</span>` : ''}</div></div></button>`;
+    <div class="flex items-center gap-2"><span class="text-xs truncate flex-1 ${n ? 'font-semibold text-ink' : 'text-mut'}">${E(cPrev(c.last, c))}</span>${n && c.is_group && (CH.unreadM || {})[c.id] ? `<span class="shrink-0 w-5 h-5 rounded-full bg-brand text-white grid place-items-center" title="Alguém respondeu ou mencionou você">${ic('at', false, 12)}</span>` : ''}${n ? `<span class="shrink-0 min-w-5 h-5 px-1.5 rounded-full bg-brand text-white text-[11px] font-bold grid place-items-center">${n > 99 ? '99+' : n}</span>` : ''}</div></div></button>`;
   }).join('') || '<p class="p-10 text-center text-sm text-mut">Nenhuma conversa ainda.<br>Toque em <b>Conversa</b> para falar com alguém.</p>') + '</div></div>';
 }
 
 /* ---------- conversa aberta ---------- */
-function openChat(id) { CH.reply = null; CH.open = CH.list.find(c => c.id === id); CH.msgs = []; CH.pin = null; CH.typing = null; renderConv(); typeChannel(true); loadMsgs(); if (typeof refreshBlocks === 'function') refreshBlocks() }
+function openChat(id) { CH.reply = null; CH.mntFor = null; CH.mntIds = []; CH.openRead = ((CH.list.find(c => c.id === id)) || {}).myRead || null; CH.open = CH.list.find(c => c.id === id); CH.msgs = []; CH.pin = null; CH.typing = null; renderConv(); typeChannel(true); loadMsgs(); if (typeof refreshBlocks === 'function') refreshBlocks() }
 function closeChat() { typeChannel(false); CH.open = null; renderChatList(); loadChats() }
 function renderConv() {
   const c = CH.open;
@@ -99,7 +99,7 @@ async function loadMsgs() {
   CH.msgs = data || []; const pids = CH.msgs.filter(m => m.poll_question).map(m => m.id); CH.votes = {};
   if (pids.length) { const { data: v } = await sb.from('message_votes').select('message_id,user_id,option_idx').in('message_id', pids); (v || []).forEach(x => (CH.votes[x.message_id] = CH.votes[x.message_id] || []).push(x)) }
   await loadMR(); CH.pin = c.pinned_message ? CH.msgs.find(m => m.id === c.pinned_message) || null : null;
-  drawMsgs(!CH.drawn || CH.drawn !== c.id); CH.drawn = c.id; CH.typing = null; subUI(); markRead();
+  drawMsgs(!CH.drawn || CH.drawn !== c.id); CH.drawn = c.id; CH.typing = null; subUI(); markRead(); if (typeof mentionBtn === 'function') mentionBtn();
 }
 function drawMsgs(bottom) {
   const el = $('#cmsgs'); if (!el) return;
@@ -195,11 +195,11 @@ async function startDM(id) {
 }
 
 /* ---------- visto / recebido ---------- */
-function markDelivered() { clearTimeout(CH.dt); CH.dt = setTimeout(() => sb.rpc('mark_delivered'), 400) }
+function markDelivered() { clearTimeout(CH.dt); CH.dt = setTimeout(() => { sb.rpc('mark_delivered').then(() => {}) }, 400) }
 function markRead() {
   const c = CH.open; if (!c || document.visibilityState !== 'visible' || $('#v-msgs').classList.contains('hidden')) return;
   const last = CH.msgs.filter(m => m.sender !== P.id).pop(); CH.rd = CH.rd || {};
-  if (!last || CH.rd[c.id] === last.id) return; CH.rd[c.id] = last.id; sb.rpc('mark_read', { p_chat: c.id }); if (CH.unread) { CH.unread[c.id] = 0; paintUnread() }
+  if (!last || CH.rd[c.id] === last.id) return; CH.rd[c.id] = last.id; sb.rpc('mark_read', { p_chat: c.id }).then(() => {}); if (CH.unread) { CH.unread[c.id] = 0; if (CH.unreadM) CH.unreadM[c.id] = 0; paintUnread() }
 }
 async function refreshMarks() {
   const c = CH.open; if (!c) return;
@@ -237,11 +237,11 @@ function sendTyping() { if (!CH.tc || Date.now() - (CH.tsent || 0) < 2000) retur
 
 /* ---------- mensagens não lidas (número vermelho) ---------- */
 async function loadUnread() {
-  const { data } = await sb.rpc('unread_counts'); CH.unread = {}; (data || []).forEach(r => { CH.unread[r.chat_id] = Number(r.n) });
+  const { data } = await sb.rpc('unread_counts'); CH.unread = {}; CH.unreadM = {}; (data || []).forEach(r => { CH.unread[r.chat_id] = Number(r.n); CH.unreadM[r.chat_id] = Number(r.mentions || 0) });
   if (CH.open) CH.unread[CH.open.id] = 0; paintUnread(); if (!CH.open && !$('#v-msgs').classList.contains('hidden')) renderChatList();
 }
 function paintUnread() {
   const n = Object.values(CH.unread || {}).reduce((a, b) => a + b, 0), b = $('#msg-dot'), t = n > 99 ? '99+' : String(n);
   b.textContent = t; b.classList.toggle('hidden', !n); document.title = (n ? '(' + t + ') ' : '') + 'OtaWeb';
 }
-function bumpUnread(cid) { CH.unread = CH.unread || {}; CH.unread[cid] = (CH.unread[cid] || 0) + 1; paintUnread(); if (!CH.open && !$('#v-msgs').classList.contains('hidden')) renderChatList() }
+function bumpUnread(cid) { CH.unread = CH.unread || {}; CH.unread[cid] = (CH.unread[cid] || 0) + 1; paintUnread(); clearTimeout(CH.ut); CH.ut = setTimeout(loadUnread, 900); if (!CH.open && !$('#v-msgs').classList.contains('hidden')) renderChatList() }

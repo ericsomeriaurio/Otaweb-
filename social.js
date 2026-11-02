@@ -102,6 +102,6 @@ function socialStart() {
   if (socialStart.on) return; socialStart.on = true;
   sb.channel('cmts').on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, () => { if (SH.open) loadComments() })
     .on('postgres_changes', { event: '*', schema: 'public', table: 'comment_likes' }, () => { if (SH.open) { clearTimeout(socialStart.t); socialStart.t = setTimeout(loadComments, 500) } }).subscribe();
-  const seen = () => { if (document.visibilityState === 'visible') sb.rpc('touch_seen') };
+  const seen = () => { if (document.visibilityState === 'visible') sb.rpc('touch_seen').then(() => {}) };
   seen(); setInterval(seen, 60000); document.addEventListener('visibilitychange', seen);
 }

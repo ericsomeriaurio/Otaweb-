@@ -194,3 +194,20 @@ function sysText(m) {
   return 'Atualização do grupo';
 }
 const sysH = m => `<div class="flex justify-center py-1"><span class="text-[11px] text-mut bg-soft rounded-full px-3 py-1 text-center max-w-[85%]">${E(sysText(m))}</span></div>`;
+
+/* ---------- marca @ quando respondem ou mencionam você ---------- */
+function isMentionToMe(m) {
+  if (m.sender === P.id || m.sys || m.deleted_for_all) return false;
+  const o = m.reply_to && CH.msgs.find(x => x.id === m.reply_to);
+  return !!(o && o.sender === P.id) || new RegExp('(^|\\W)@' + P.handle + '\\b', 'i').test(m.body || '');
+}
+function mentionBtn() {
+  const c = CH.open; if (!c) return;
+  if (CH.mntFor !== c.id) { CH.mntFor = c.id; const t = CH.openRead ? new Date(CH.openRead).getTime() : NaN; CH.mntIds = isNaN(t) || !c.is_group ? [] : CH.msgs.filter(m => isMentionToMe(m) && new Date(m.created_at).getTime() > t).map(m => m.id) }
+  let b = document.getElementById('mbtn'); const n = (CH.mntIds || []).length;
+  if (!n) { if (b) b.remove(); return }
+  const root = $('#cmsgs').parentElement; root.classList.add('relative');
+  if (!b) { b = document.createElement('button'); b.id = 'mbtn'; b.setAttribute('aria-label', 'Ir para a mensagem que mencionou ou respondeu você'); b.className = 'absolute right-4 bottom-24 z-20 w-12 h-12 rounded-full bg-brand text-white shadow-lg grid place-items-center'; b.onclick = jumpMention; root.appendChild(b) }
+  b.innerHTML = ic('at', false, 22) + `<span class="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-card text-brand text-[11px] font-bold grid place-items-center border border-line">${n}</span>`;
+}
+function jumpMention() { const id = (CH.mntIds || []).shift(); if (id) scrollToMsg(id); mentionBtn() }
