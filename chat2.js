@@ -160,7 +160,7 @@ function reportUser(id) { reportModal({ user: id, chat: CH.open.id }) }
 function reportChat() { reportModal({ chat: CH.open.id }) }
 function reportModal(t) { window._rt = t; modal('<h3 class="font-bold text-lg mb-3">Denunciar</h3>' + ['Spam ou golpe', 'Assédio ou ameaça', 'Conteúdo impróprio', 'Outro motivo'].map(r => `<button class="btn2 w-full mb-2 !justify-start" data-r="${r}" onclick="sendReport(this.dataset.r)">${r}</button>`).join('')) }
 async function sendReport(reason) {
-  const t = window._rt || {}; closeM(); const { error } = await sb.from('reports').insert({ reporter: P.id, reason, reported_user: t.user || null, chat_id: t.chat || null });
+  const t = window._rt || {}; closeM(); const { error } = await sb.from('reports').insert({ reporter: P.id, reason, reported_user: t.user || null, chat_id: t.chat || null, post_id: t.post || null });
   if (error) return T(/reported_user|chat_id/.test(error.message) ? 'Falta rodar a migração 5 no Supabase.' : 'Não enviou: ' + error.message); T('Denúncia enviada. Obrigado!');
 }
 function composerState() {

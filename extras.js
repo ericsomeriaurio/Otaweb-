@@ -46,7 +46,7 @@ function mnPick(h) {
   el.value = v.slice(0, start) + '@' + h + ' ' + v.slice(b._pos); const p = start + h.length + 2; el.focus(); el.setSelectionRange(p, p); mnHide();
 }
 
-/* ---------- notificações ---------- */
+/* ---------- notificações que abrem o post ---------- */
 async function loadNotifs() {
   const { data, error } = await sb.from('notifications').select('id,type,read,ref_id,created_at,actor:profiles!actor(id,name,handle,avatar_url)').eq('user_id', P.id).order('created_at', { ascending: false }).limit(50);
   if (error) { $('#v-notif').innerHTML = errH(error); return }
@@ -65,7 +65,7 @@ async function showPost(id, withC) {
   posts = await prep([data]); el.innerHTML = backBtn('notif') + safe(posts); if (withC) openComments(id);
 }
 
-/* ---------- salvos ---------- */
+/* ---------- salvos por categoria ---------- */
 async function save(id, on) {
   if (on) return menu('Publicação salva', [[ic('bookmark') + ' Mudar de categoria', () => saveTo(id)], [ic('trash') + ' Remover dos salvos', async () => { await sb.from('saves').delete().match({ post_id: id, user_id: P.id }); T('Removido dos salvos'); refresh() }]]);
   saveTo(id);
@@ -92,57 +92,18 @@ async function drawSaved() {
   const cats = {}; SV.rows.forEach(r => cats[r.category] = (cats[r.category] || 0) + 1);
   const list = SV.rows.filter(r => SV.cat === 'Todos' || r.category === SV.cat); posts = await prep(list.map(r => r.post));
   const chips = ['Todos', ...Object.keys(cats)].map(c => `<button class="btn2 !py-1.5 !px-3 whitespace-nowrap ${SV.cat === c ? 'sel' : ''}" data-c="${E(c)}" onclick="SV.cat=this.dataset.c;drawSaved()">${E(c)} <span class="text-mut">${c === 'Todos' ? SV.rows.length : cats[c]}</span></button>`).join('');
-  $('#v-other').innerHTML = backBtn('menu') + `<h2 class="font-bold text-xl px-1">Salvos</h2><div class="flex gap-2 overflow-x-auto pb-1">${chips}</div>` + (safe(posts) || `<p class="text-center text-sm text-mut py-12">Nada salvo${SV.cat === 'Todos' ? ' ainda' : ' nesta categoria'}.</p>`);
+  $('#v-other').innerHTML = backBtn('menu') + `<h2 class="font-bold text-xl px-1">Salvos</h2><div class="flex gap-2 overflow-x-auto pb-1">${chips}</div>` + (safe(posts) || `<p class="text-center text-sm text-mut py-12">Nada salvo${SV.cat === 'Todos' ? ' ainda' : ' nesta categoria'}.<br>Use o menu de três pontos de um post para salvar.</p>`);
 }
 
-/* ---------- menu COM ADMIN ---------- */
+/* ---------- menu e definições ---------- */
 function renderMenu() {
-  const t = localStorage.getItem('ow-theme') || 'auto';
-  const row = (i, l, d, f) => `<button class="w-full flex items-center gap-3 p-4 text-left hover:bg-soft transition" onclick="${f}"><span class="w-9 h-9 rounded-full bg-soft text-brand grid place-items-center shrink-0">${ic(i, false, 19)}</span><span class="min-w-0 flex-1"><span class="block text-sm font-semibold">${l}</span><span class="block text-xs text-mut">${d}</span></span></button>`;
-  const isAdmin = P && P.is_admin;
+  const t = localStorage.getItem('ow-theme') || 'auto', row = (i, l, d, f) => `<button class="w-full flex items-center gap-3 p-4 text-left hover:bg-soft transition" onclick="${f}"><span class="w-9 h-9 rounded-full bg-soft text-brand grid place-items-center shrink-0">${ic(i, false, 19)}</span><span class="min-w-0 flex-1"><span class="block text-sm font-semibold">${l}</span><span class="block text-xs text-mut">${d}</span></span></button>`;
   $('#v-menu').innerHTML = `<div class="max-w-xl mx-auto p-3 md:py-5 space-y-3"><h2 class="font-bold text-xl px-1">Menu</h2>
-  <button class="card w-full flex items-center gap-3 p-4 text-left" onclick="showProfile('${P.id}')">${av(P, 52)}<div><div class="font-semibold">${E(P.name)}</div><div class="text-xs text-mut">@${E(P.handle)} ${isAdmin ? '· 🛡️ Admin' : '· Ver seu perfil'}</div></div></button>
-  ${isAdmin ? `<div class="card overflow-hidden divide-y divide-line !border-brand/50 border-2"><div class="p-3 bg-brand/10 text-sm font-bold text-brand">🛡️ Administração</div>${row('shield', 'Painel de Moderação', 'Banir usuários, ver denúncias', 'openAdmin()')}${row('users', 'Usuários banidos', 'Listar e desbanir', 'openBanned()')}</div>` : ''}
-  <div class="card overflow-hidden divide-y divide-line">${row('bookmark', 'Salvos', 'Publicações guardadas por categoria', 'openSaved()')}${row('gear', 'Definições', 'Conta, senha e privacidade', 'openSettings()')}${row('info', 'Sobre o OtaWeb', 'Versão e informações', 'openAbout()')}</div>
+  <button class="card w-full flex items-center gap-3 p-4 text-left" onclick="showProfile('${P.id}')">${av(P, 52)}<div><div class="font-semibold">${E(P.name)}</div><div class="text-xs text-mut">@${E(P.handle)} · Ver seu perfil</div></div></button>
+  <div class="card overflow-hidden divide-y divide-line">${row('bookmark', 'Salvos', 'Publicações guardadas por categoria', 'openSaved()')}${row('gear', 'Definições', 'Conta, senha e privacidade', 'openSettings()')}${row('info', 'Sobre o OtaWeb', 'Versão e informações', 'openAbout()')}${P.is_admin ? row('shield', 'Administração', 'Painel da rede', 'openAdmin()') : ''}</div>
   <div class="card p-4 space-y-3"><div class="text-sm font-semibold">Aparência</div><div class="grid grid-cols-3 gap-2">${[['light', 'sun', 'Claro'], ['dark', 'moon', 'Escuro'], ['auto', 'monitor', 'Sistema']].map(([k, i, l]) => `<button class="btn2 ${t === k ? 'sel' : ''}" onclick="setTheme('${k}')">${ic(i, false, 16)}${l}</button>`).join('')}</div></div>
   <button class="card w-full flex items-center gap-3 p-4 text-left text-brand font-semibold" onclick="doLogout()">${ic('logout', false, 20)}Sair da conta</button></div>`;
 }
-
-/* ---------- PAINEL ADMIN ---------- */
-async function openAdmin(){
-  go('other'); window.lastProfile = null; $('#v-other').innerHTML = backBtn('menu') + `<h2 class="font-bold text-xl px-1">🛡️ Painel Admin</h2><div class="card p-4 space-y-3">
-    <div class="flex gap-2"><input id="adm-handle" class="inp flex-1" placeholder="@usuario"><button class="btn2" onclick="adminBan()">Banir</button><button class="btn2" onclick="adminUnban()">Desbanir</button></div>
-    <input id="adm-reason" class="inp" placeholder="Motivo do ban (opcional)">
-  </div><div id="adm-list" class="space-y-3"><div class="sk h-20"></div></div>`;
-  loadAdminLists();
-}
-async function loadAdminLists(){
-  const [{data: reps},{data: banned}] = await Promise.all([
-    sb.from('reports').select('id,reason,target_type,target_id,created_at,reporter:profiles!reporter(handle,name),reported:profiles!reported(handle,name)').order('created_at',{ascending:false}).limit(25),
-    sb.from('profiles').select('handle,name,banned_at,ban_reason').not('banned_at','is',null).order('banned_at',{ascending:false}).limit(25)
-  ]);
-  $('#adm-list').innerHTML = `
-    <div class="card p-3"><h4 class="font-bold text-sm mb-2">Denúncias (${(reps||[]).length})</h4>${(reps||[]).map(r=>`<div class="text-xs p-2 bg-soft rounded mb-1 flex justify-between gap-2"><span><b>@${E(r.reporter?.handle||'?')}</b> -> <b>@${E(r.reported?.handle||'')}</b><br>${E(r.reason)}<br><span class="text-mut">${E(r.target_type)} ${ago(r.created_at)}</span></span></div>`).join('')||'<span class="text-xs text-mut">Nenhuma denúncia</span>'}</div>
-    <div class="card p-3"><h4 class="font-bold text-sm mb-2">Banidos (${(banned||[]).length})</h4>${(banned||[]).map(b=>`<div class="text-xs p-2 bg-soft rounded mb-1 flex justify-between"><span><b>@${E(b.handle)}</b> ${E(b.name||'')}<br><span class="text-mut">${E(b.ban_reason||'')}</span></span><button class="btn2 !py-1" onclick="adminUnbanHandle('${E(b.handle)}')">Desbanir</button></div>`).join('')||'<span class="text-xs text-mut">Ninguém banido</span>'}</div>`;
-}
-async function openBanned(){ openAdmin(); }
-async function adminBan(){
-  const h = ($('#adm-handle').value||'').trim().replace('@','').toLowerCase();
-  if(!h) return T('Digite @usuario');
-  const reason = ($('#adm-reason').value||'').trim() || 'Violação de regras';
-  const {error} = await sb.from('profiles').update({banned_at: new Date().toISOString(), ban_reason: reason}).eq('handle', h);
-  if(error) return T('Erro: '+error.message);
-  T('@'+h+' banido'); loadAdminLists();
-}
-async function adminUnban(){
-  const h = ($('#adm-handle').value||'').trim().replace('@','').toLowerCase();
-  if(!h) return T('Digite @usuario');
-  const {error} = await sb.from('profiles').update({banned_at: null, ban_reason: null}).eq('handle', h);
-  if(error) return T('Erro: '+error.message);
-  T('@'+h+' desbanido'); loadAdminLists();
-}
-function adminUnbanHandle(h){ $('#adm-handle').value = h; adminUnban(); }
-
 function openAbout() { modal(`<h3 class="font-bold text-lg mb-2">OtaWeb</h3><p class="text-sm text-mut mb-4">A rede social para quem vive anime. Versão 0.4.</p><button class="btn w-full" onclick="closeM()">Fechar</button>`) }
 async function openSettings() {
   go('other'); window.lastProfile = null; window.reloadOther = () => {}; $('#q').value = '';

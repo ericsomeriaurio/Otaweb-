@@ -58,6 +58,7 @@ async function startSession(ses) {
   try {
     const { data, error } = await sb.from('profiles').select('*').eq('id', ses.user.id).single();
     if (error || !data) { T('Não consegui carregar seu perfil: ' + (error ? error.message : 'perfil não encontrado')); return }
+    if (data.banned_at && typeof showBanned === 'function') { showBanned(); return }
     P = data; $('#auth').classList.add('hidden'); go('feed'); live(); loadBadge(); if (typeof chatLive === 'function') chatLive(); if (typeof socialStart === 'function') socialStart();
     if (location.hash.startsWith('#u-')) openHandle(location.hash.slice(3));
   } finally { startSession.busy = false }
@@ -211,7 +212,7 @@ function postMenu(id) {
   if (p.media_url) it.push([ic('download') + ' Baixar mídia', () => dlm(p.media_url)]);
   if (p.author.id === P.id) it.push([ic('edit') + ' Editar publicação', () => editPost(id)]);
   if (p.author.id === P.id) it.push([ic('trash') + ' Apagar publicação', async () => { await sb.from('posts').delete().eq('id', id); T('Publicação apagada.'); refresh() }]);
-  else it.push([ic('flag') + ' Denunciar', async () => { await sb.from('reports').insert({ reporter: P.id, post_id: id, reason: 'denúncia' }); T('Denúncia enviada. Obrigado!') }]);
+  else it.push([ic('flag') + ' Denunciar', () => reportModal({ post: id })]);
   menu('Opções da publicação', it);
 }
 async function repost(id) { const v = await ask('Repostar na rede', ['Comentário (opcional)']); if (!v) return; await sb.from('posts').insert({ author: P.id, body: v[0], repost_of: id }); T('Repostado! 🔁'); refresh() }
