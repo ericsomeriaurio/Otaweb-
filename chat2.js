@@ -215,7 +215,8 @@ function reportModal(t) {
 }
 async function sendReport(reason) {
   const t = window._rt || {}; closeM(); let error;
-  if (t.chat) ({ error } = await sb.rpc('report_conversation', { p_chat: t.chat, p_user: t.user || null, p_reason: reason }));
+  if (t.story) ({ error } = await sb.rpc('report_story', { p_story: t.story, p_reason: reason }));
+  else if (t.chat) ({ error } = await sb.rpc('report_conversation', { p_chat: t.chat, p_user: t.user || null, p_reason: reason }));
   else ({ error } = await sb.from('reports').insert({ reporter: P.id, reason, reported_user: t.user || null, post_id: t.post || null }));
   if (error) return T(/does not exist|Could not find|schema cache|column/.test(error.message) ? 'Falta rodar a migração 8 no Supabase.' : 'Não enviou: ' + error.message);
   T('Denúncia enviada. Obrigado!');

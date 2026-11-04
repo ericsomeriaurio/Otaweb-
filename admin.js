@@ -77,6 +77,7 @@ function evidenceH(r) {
       ${m.deleted ? '<i class="text-mut">apagada pelo autor</i>' : `${m.body && m.body !== '__heart__' ? `<div class="whitespace-pre-wrap break-words">${E(m.body)}</div>` : ''}${m.poll ? `<div>Enquete: ${E(m.poll)}</div>` : ''}${m.lat != null ? '<div class="text-mut">Localização compartilhada</div>' : ''}${m.media_url ? mediaH(m.media_url, m.media_type, 'rounded-lg max-h-40 mt-1') : ''}`}</div>` }).join('') + '</div>';
 }
 function adRep(r) {
+  if (r.story) return adRepStory(r);
   const kind = r.message_id ? 'Mensagem' : r.post ? 'Publicação' : r.chat ? (r.chat.is_group ? 'Grupo' : 'Conversa') : 'Usuário', open = r.status === 'open', who = r.reporter || {};
   const st = { open: 'Aberta', resolved: 'Resolvida', dismissed: 'Descartada' }[r.status]; let body = '', acts = '';
   if (r.post) {
@@ -138,6 +139,17 @@ function adUserMenu(id, pen, isAdm) {
 async function adRegistro() {
   const el = $('#ad-body'); if (!el) return; const { data, error } = await sb.rpc('admin_log_list'); if (!$('#ad-body')) return;
   if (error) { el.innerHTML = adErr(error); return }
-  const nm = { delete_post: 'apagou uma publicação', ban: 'suspendeu uma conta', unban: 'reativou uma conta', apply_ban: 'bloqueou uma conta para sempre', apply_account: 'suspendeu uma conta', apply_messages: 'impediu alguém de enviar mensagens', apply_posts: 'impediu alguém de publicar', apply_comments: 'impediu alguém de comentar', lift: 'levantou penalidades', appeal_accepted: 'aceitou um pedido de revisão', appeal_denied: 'negou um pedido de revisão', make_admin: 'tornou alguém administrador', remove_admin: 'removeu um administrador', report_dismissed: 'descartou uma denúncia', report_resolved: 'resolveu uma denúncia', report_open: 'reabriu uma denúncia' };
+  const nm = { delete_post: 'apagou uma publicação', delete_story: 'apagou um story', ban: 'suspendeu uma conta', unban: 'reativou uma conta', apply_ban: 'bloqueou uma conta para sempre', apply_account: 'suspendeu uma conta', apply_messages: 'impediu alguém de enviar mensagens', apply_posts: 'impediu alguém de publicar', apply_comments: 'impediu alguém de comentar', lift: 'levantou penalidades', appeal_accepted: 'aceitou um pedido de revisão', appeal_denied: 'negou um pedido de revisão', make_admin: 'tornou alguém administrador', remove_admin: 'removeu um administrador', report_dismissed: 'descartou uma denúncia', report_resolved: 'resolveu uma denúncia', report_open: 'reabriu uma denúncia' };
   el.innerHTML = `<div class="card divide-y divide-line overflow-hidden">${(data || []).map(l => `<div class="p-3"><div class="text-sm"><b>${E(l.admin)}</b> ${nm[l.action] || E(l.action)}</div>${l.details && l.details.body ? `<div class="text-xs text-mut truncate">“${E(l.details.body)}”</div>` : ''}${l.details && l.details.reason ? `<div class="text-xs text-mut">Motivo: ${E(l.details.reason)}${l.details.hours ? ' · ' + l.details.hours + ' h' : ''}</div>` : ''}<div class="text-[11px] text-mut">${ago(l.created_at)}</div></div>`).join('') || '<p class="p-8 text-center text-sm text-mut">Nenhuma ação registrada ainda.</p>'}</div>`;
+}
+
+/* ---------- denúncia de story ---------- */
+const adDelStory = (sid, rid) => confirmBox('Apagar story?', 'Ele some para todos e não dá para desfazer.', 'Apagar', () => adCall('admin_delete_story', { p_id: sid, p_report: rid || null }, 'Story apagado.'));
+function adRepStory(r) {
+  const s = r.story, u = r.user || {}, who = r.reporter || {}, open = r.status === 'open', st = { open: 'Aberta', resolved: 'Resolvida', dismissed: 'Descartada' }[r.status];
+  const prev = s.media_url ? mediaH(s.media_url, s.media_type, 'rounded-lg max-h-64') : `<div class="rounded-lg p-6 text-center text-white font-bold whitespace-pre-wrap break-words" style="background:${(typeof BGS !== 'undefined' && BGS[s.bg]) || '#7a1633'}">${E(s.caption || '')}</div>`;
+  return `<div class="card p-3 space-y-2"><div class="flex items-center justify-between gap-2"><span class="text-xs font-bold text-brand">Story · ${E(r.reason || 'sem motivo')}</span><span class="text-[11px] text-mut">${st} · ${ago(r.created_at)}</span></div>
+  ${u.id ? `<div class="text-xs text-mut">Autor: <button class="font-semibold text-brand" onclick="showProfile('${u.id}')">${E(u.name)} (@${E(u.handle)})</button></div>` : ''}${prev}${s.media_url && s.caption ? `<p class="text-sm">${E(s.caption)}</p>` : ''}
+  <div class="text-[11px] text-mut">Denunciado por ${E(who.name || '?')} (@${E(who.handle || '?')})${r.note ? ' · ' + E(r.note) : ''}</div>
+  <div class="flex flex-wrap gap-2 pt-1">${open ? `<button class="btn !py-1.5 !px-3 text-xs" onclick="adDelStory('${s.id}','${r.id}')">Apagar story</button>${u.id ? `<button class="btn2 !py-1.5 !px-3 text-xs !text-brand" onclick="adPenalty('${u.id}','${r.id}')">Penalizar autor</button>` : ''}<button class="btn2 !py-1.5 !px-3 text-xs" onclick="adSetRep('${r.id}','dismissed')">Descartar</button><button class="btn2 !py-1.5 !px-3 text-xs" onclick="adSetRep('${r.id}','resolved')">Resolvida</button>` : `<button class="btn2 !py-1.5 !px-3 text-xs" onclick="adSetRep('${r.id}','open')">Reabrir</button>`}</div></div>`;
 }
