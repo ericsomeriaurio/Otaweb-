@@ -58,8 +58,8 @@ async function startSession(ses) {
   try {
     const { data, error } = await sb.from('profiles').select('*').eq('id', ses.user.id).single();
     if (error || !data) { T('Não consegui carregar seu perfil: ' + (error ? error.message : 'perfil não encontrado')); return }
-    if (data.banned_at && typeof showBanned === 'function') { showBanned(); return }
-    P = data; $('#auth').classList.add('hidden'); go('feed'); live(); loadBadge(); if (typeof chatLive === 'function') chatLive(); if (typeof socialStart === 'function') socialStart();
+    if (typeof gateCheck === 'function' && await gateCheck(data)) return;
+    P = data; $('#auth').classList.add('hidden'); go('feed'); if (typeof restrBanner === 'function') restrBanner(); live(); loadBadge(); if (typeof chatLive === 'function') chatLive(); if (typeof socialStart === 'function') socialStart();
     if (location.hash.startsWith('#u-')) openHandle(location.hash.slice(3));
   } finally { startSession.busy = false }
 }
@@ -247,6 +247,7 @@ function openCreate(kind) {
   if (kind === 'poll') $('#pollbox').classList.remove('hidden');
 }
 async function publish() {
+  if (typeof restrOk === 'function' && !restrOk('posts')) return;
   const body = $('#np').value.trim(), pq = $('#pollbox').classList.contains('hidden') ? '' : $('#pq').value.trim(), po = [0, 1, 2, 3].map(i => $('#po' + i).value.trim()).filter(Boolean), poll = pq && po.length >= 2;
   if (!body && !file && !poll) return T('Escreva algo, anexe uma mídia ou crie uma enquete.');
   $('#pub').disabled = true; let m = null; if (file) { T('Enviando mídia...'); m = await upload(file); if (!m) { $('#pub').disabled = false; return } }

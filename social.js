@@ -71,6 +71,7 @@ function replyTo(id) {
 }
 function cancelReply() { SH.reply = null; const b = $('#creply'); b.classList.add('hidden'); b.classList.remove('flex') }
 async function sendComment() {
+  if (typeof restrOk === 'function' && !restrOk('comments')) return;
   const i = $('#cin2'), b = i.value.trim(); if (!b || !SH.post) return;
   const row = { post_id: SH.post, author: P.id, body: b }; if (SH.reply) row.parent_id = SH.reply.id; i.value = ''; cancelReply();
   const { error } = await sb.from('comments').insert(row); if (error) { T('Não comentou: ' + error.message); i.value = b; return }

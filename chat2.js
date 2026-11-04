@@ -158,11 +158,6 @@ async function blockUser(id) { const { error } = await sb.from('blocks').insert(
 async function unblock(id) { const { error } = await sb.from('blocks').delete().match({ blocker: P.id, blocked: id }); if (error) return T('Não desbloqueou: ' + error.message); BLK.delete(id); CH.infoOpen = false; closeM(); T('Contato desbloqueado.'); renderConv(); loadMsgs() }
 function reportUser(id) { reportModal({ user: id, chat: CH.open.id }) }
 function reportChat() { reportModal({ chat: CH.open.id }) }
-function reportModal(t) { window._rt = t; modal('<h3 class="font-bold text-lg mb-3">Denunciar</h3>' + ['Spam ou golpe', 'Assédio ou ameaça', 'Conteúdo impróprio', 'Outro motivo'].map(r => `<button class="btn2 w-full mb-2 !justify-start" data-r="${r}" onclick="sendReport(this.dataset.r)">${r}</button>`).join('')) }
-async function sendReport(reason) {
-  const t = window._rt || {}; closeM(); const { error } = await sb.from('reports').insert({ reporter: P.id, reason, reported_user: t.user || null, chat_id: t.chat || null, post_id: t.post || null });
-  if (error) return T(/reported_user|chat_id/.test(error.message) ? 'Falta rodar a migração 5 no Supabase.' : 'Não enviou: ' + error.message); T('Denúncia enviada. Obrigado!');
-}
 function composerState() {
   const c = CH.open; if (!c || c.is_group || !c.other) return; const i = $('#cin'); if (!i) return;
   const porMim = BLK.has(c.other.id), porEle = BLK_ME.has(c.other.id); if (!porMim && !porEle) return;
@@ -211,3 +206,17 @@ function mentionBtn() {
   b.innerHTML = ic('at', false, 22) + `<span class="absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-card text-brand text-[11px] font-bold grid place-items-center border border-line">${n}</span>`;
 }
 function jumpMention() { const id = (CH.mntIds || []).shift(); if (id) scrollToMsg(id); mentionBtn() }
+
+/* ---------- denúncias: a administração recebe as mensagens como prova ---------- */
+function reportModal(t) {
+  window._rt = t;
+  modal('<h3 class="font-bold text-lg mb-2">Denunciar</h3>' + (t.chat ? '<p class="text-xs text-mut mb-3">Ao denunciar, as 4 últimas mensagens desta conversa são enviadas à administração para análise. Ninguém mais vê.</p>' : '') +
+    ['Spam ou golpe', 'Assédio ou ameaça', 'Conteúdo impróprio', 'Outro motivo'].map(r => `<button class="btn2 w-full mb-2 !justify-start" data-r="${r}" onclick="sendReport(this.dataset.r)">${r}</button>`).join(''));
+}
+async function sendReport(reason) {
+  const t = window._rt || {}; closeM(); let error;
+  if (t.chat) ({ error } = await sb.rpc('report_conversation', { p_chat: t.chat, p_user: t.user || null, p_reason: reason }));
+  else ({ error } = await sb.from('reports').insert({ reporter: P.id, reason, reported_user: t.user || null, post_id: t.post || null }));
+  if (error) return T(/does not exist|Could not find|schema cache|column/.test(error.message) ? 'Falta rodar a migração 8 no Supabase.' : 'Não enviou: ' + error.message);
+  T('Denúncia enviada. Obrigado!');
+}

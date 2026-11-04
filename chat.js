@@ -133,6 +133,7 @@ function pollM(m) {
 
 /* ---------- enviar ---------- */
 async function csend(extra) {
+  if (typeof restrOk === 'function' && !restrOk('messages')) return;
   const i = $('#cin'), t = i.value.trim(); if (!CH.open) return;
   const row = { chat_id: CH.open.id, sender: P.id, ...(extra || { body: t || '__heart__' }), ...(CH.reply ? { reply_to: CH.reply.id } : {}) }; replyOff();
   i.value = ''; cdyn(); $('#cattach').classList.add('hidden');
