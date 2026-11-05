@@ -25,7 +25,7 @@ async function saveNewPass() {
 }
 
 /* ---------- menções (@usuario) ---------- */
-const linkify = t => E(t).replace(/(^|[^\w])@([A-Za-z0-9_]{3,20})\b/g, (m, a, h) => `${a}<button class="text-brand font-semibold hover:underline" onclick="event.stopPropagation();openHandle('${h.toLowerCase()}')">@${h}</button>`);
+const linkify = t => E(t).replace(/(^|[^\w])@([A-Za-z0-9_]{3,20})\b/g, (m, a, h) => h.toLowerCase() === 'seguidores' ? `${a}<span class="text-brand font-semibold">@seguidores</span>` : `${a}<button class="text-brand font-semibold hover:underline" onclick="event.stopPropagation();openHandle('${h.toLowerCase()}')">@${h}</button>`);
 let _mn;
 document.addEventListener('input', e => {
   const el = e.target; if (!el.matches || !el.matches('textarea, input.inp') || el.type === 'password' || ['q', 'uq', 'cin', 'a-email', 'fg-e'].includes(el.id)) return;
@@ -35,11 +35,13 @@ document.addEventListener('input', e => {
 document.addEventListener('click', e => { if (!e.target.closest('#mn')) mnHide() });
 function mnHide() { const b = document.getElementById('mn'); if (b) b.remove() }
 async function mnShow(el, q, pos) {
-  const { data } = await sb.from('profiles').select('id,name,handle,avatar_url').ilike('handle', q + '%').limit(5); if (!data || !data.length) return mnHide();
-  let b = document.getElementById('mn'); if (!b) { b = document.createElement('div'); b.id = 'mn'; b.className = 'fixed z-[80] card p-1 w-64 max-w-[90vw] shadow-lg'; document.body.appendChild(b) }
-  const r = el.getBoundingClientRect(), h = data.length * 46 + 8; b.style.left = Math.max(8, Math.min(r.left, innerWidth - 270)) + 'px'; b.style.top = (r.top - h - 6 > 8 ? r.top - h - 6 : r.bottom + 6) + 'px';
+  const { data } = await sb.from('profiles').select('id,name,handle,avatar_url').ilike('handle', q + '%').limit(5), users = data || [], special = 'seguidores'.startsWith(q.toLowerCase());
+  if (!users.length && !special) return mnHide();
+  let b = document.getElementById('mn'); if (!b) { b = document.createElement('div'); b.id = 'mn'; b.className = 'fixed z-[80] card p-1 w-72 max-w-[90vw] shadow-lg'; document.body.appendChild(b) }
+  const r = el.getBoundingClientRect(), h = users.length * 46 + (special ? 56 : 0) + 8; b.style.left = Math.max(8, Math.min(r.left, innerWidth - 290)) + 'px'; b.style.top = (r.top - h - 6 > 8 ? r.top - h - 6 : r.bottom + 6) + 'px';
   b._el = el; b._pos = pos; b._q = q;
-  b.innerHTML = data.map(u => `<button class="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-soft text-left" onmousedown="event.preventDefault()" onclick="mnPick('${u.handle}')">${av(u, 30)}<span class="text-sm truncate"><b>${E(u.name)}</b> <span class="text-mut">@${E(u.handle)}</span></span></button>`).join('');
+  b.innerHTML = (special ? `<button class="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-soft text-left" onmousedown="event.preventDefault()" onclick="mnPick('seguidores')"><span class="w-[30px] h-[30px] rounded-full bg-brand text-white grid place-items-center shrink-0">${ic('users', false, 16)}</span><span class="text-sm"><b>@seguidores</b><span class="block text-[11px] leading-tight text-mut">Avisa todos os seus seguidores (máx. 3 por dia)</span></span></button>` : '') +
+    users.map(u => `<button class="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-soft text-left" onmousedown="event.preventDefault()" onclick="mnPick('${u.handle}')">${av(u, 30)}<span class="text-sm truncate"><b>${E(u.name)}</b> <span class="text-mut">@${E(u.handle)}</span></span></button>`).join('');
 }
 function mnPick(h) {
   const b = document.getElementById('mn'); if (!b) return; const el = b._el, v = el.value, start = b._pos - b._q.length - 1;
@@ -50,7 +52,7 @@ function mnPick(h) {
 async function loadNotifs() {
   const { data, error } = await sb.from('notifications').select('id,type,read,ref_id,created_at,actor:profiles!actor(id,name,handle,avatar_url)').eq('user_id', P.id).order('created_at', { ascending: false }).limit(50);
   if (error) { $('#v-notif').innerHTML = errH(error); return }
-  const tx = { like: 'reagiu à sua publicação', comment: 'comentou na sua publicação', reply: 'respondeu ao seu comentário', follow: 'começou a seguir você', mention: 'mencionou você', story_react: 'reagiu ao seu story' }, ico = { like: 'heart', comment: 'msgc', reply: 'msgc', follow: 'user', mention: 'at', story_react: 'heart' };
+  const tx = { like: 'reagiu à sua publicação', comment: 'comentou na sua publicação', reply: 'respondeu ao seu comentário', follow: 'começou a seguir você', mention: 'mencionou você', mention_all: 'mencionou todos os seguidores', story_react: 'reagiu ao seu story' }, ico = { like: 'heart', comment: 'msgc', reply: 'msgc', follow: 'user', mention: 'at', mention_all: 'at', story_react: 'heart' };
   $('#v-notif').innerHTML = `<div class="max-w-xl mx-auto p-3 md:py-5"><h2 class="font-bold text-xl mb-3 px-1">Notificações</h2><div class="card divide-y divide-line overflow-hidden">` +
     ((data || []).filter(n => n.actor).map(n => `<button class="w-full flex items-center gap-3 p-3 text-left hover:bg-soft transition ${n.read ? '' : 'bg-brand/10'}" onclick="openNotif('${n.type}','${n.ref_id || ''}','${n.actor.id}')"><span class="relative shrink-0">${av(n.actor, 46)}<span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-brand text-white grid place-items-center ring-2 ring-card">${ic(ico[n.type] || 'bell', n.type === 'like', 11)}</span></span><div class="text-sm flex-1 min-w-0"><b>${E(n.actor.name)}</b> ${tx[n.type] || 'interagiu com você'}<div class="text-xs text-mut mt-0.5">${ago(n.created_at)}</div></div></button>`).join('') || '<p class="p-10 text-center text-sm text-mut">Nenhuma notificação por enquanto.</p>') + '</div></div>';
   if ((data || []).some(n => !n.read)) { await sb.from('notifications').update({ read: true }).eq('user_id', P.id).eq('read', false); loadBadge() }
