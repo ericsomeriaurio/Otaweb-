@@ -226,7 +226,7 @@ function share(id) {
 function pick(f) { if (!f) return; file = f; prevH() }
 function prevH() { $('#prev').innerHTML = file ? `<div class="flex items-center gap-2 p-2 rounded-lg bg-soft">${ic('clip', false, 15)}<span class="truncate flex-1">${E(file.name)}</span><button onclick="file=null;prevH()" class="text-mut" aria-label="Remover">${ic('x', false, 15)}</button></div>` : '' }
 function openSheet() {
-  const o = [['text', 'type', 'Publicação de texto', 'Compartilhe uma ideia'], ['photo', 'image', 'Foto', 'Envie uma imagem'], ['video', 'video', 'Vídeo', 'Também aparece em Reels'], ['poll', 'chart', 'Enquete', 'Pergunte à comunidade'], ['story', 'zap', 'Story de 48 horas', 'Some sozinho depois de 2 dias']];
+  const o = [['text', 'type', 'Publicação de texto', 'Compartilhe uma ideia'], ['photo', 'image', 'Foto', 'Envie uma imagem'], ['video', 'video', 'Vídeo', 'Também aparece em Reels'], ['poll', 'chart', 'Enquete', 'Pergunte à comunidade'], ['story', 'zap', 'Story', 'Some sozinho no tempo que você escolher']];
   modal(`<div class="flex items-center justify-between mb-2"><h3 class="font-bold text-lg">Criar</h3><button class="circ" onclick="closeM()" aria-label="Fechar">${ic('x', false, 18)}</button></div>` +
     o.map(([k, i, t, d]) => `<button onclick="${k === 'story' ? 'openStoryCreate()' : `openCreate('${k}')`}" class="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-soft text-left"><span class="w-10 h-10 rounded-full bg-soft text-brand grid place-items-center">${ic(i, false, 20)}</span><span><span class="block text-sm font-semibold">${t}</span><span class="block text-xs text-mut">${d}</span></span></button>`).join(''));
 }

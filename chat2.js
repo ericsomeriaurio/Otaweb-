@@ -172,22 +172,6 @@ async function removeGroupPhoto() {
 }
 
 /* ---------- avisos do grupo (criados pelo banco) ---------- */
-function sysText(m) {
-  const s = m.sys || {}, eu = id => id === P.id, A = eu(s.a) ? 'Você' : (s.an || 'Alguém'), U = s.un || 'Alguém';
-  switch (s.t) {
-    case 'created': return A + ' criou o grupo';
-    case 'added': return eu(s.u) ? A + ' adicionou você' : A + ' adicionou ' + U;
-    case 'removed': return eu(s.u) ? A + ' removeu você' : A + ' removeu ' + U;
-    case 'left': return (eu(s.u) ? 'Você' : U) + ' saiu do grupo';
-    case 'admin': return (eu(s.u) ? 'Você' : U) + ' agora é administrador';
-    case 'unadmin': return (eu(s.u) ? 'Você' : U) + ' deixou de ser administrador';
-    case 'owner': return (eu(s.u) ? 'Você' : U) + ' agora é o dono do grupo';
-    case 'renamed': return A + ' mudou o nome do grupo para \u201c' + (s.name || '') + '\u201d';
-    case 'photo': return A + ' mudou a foto do grupo';
-    case 'photo_removed': return A + ' removeu a foto do grupo';
-  }
-  return 'Atualização do grupo';
-}
 const sysH = m => `<div class="flex justify-center py-1"><span class="text-[11px] text-mut bg-soft rounded-full px-3 py-1 text-center max-w-[85%]">${E(sysText(m))}</span></div>`;
 
 /* ---------- marca @ quando respondem ou mencionam você ---------- */
@@ -220,4 +204,23 @@ async function sendReport(reason) {
   else ({ error } = await sb.from('reports').insert({ reporter: P.id, reason, reported_user: t.user || null, post_id: t.post || null }));
   if (error) return T(/does not exist|Could not find|schema cache|column/.test(error.message) ? 'Falta rodar a migração 8 no Supabase.' : 'Não enviou: ' + error.message);
   T('Denúncia enviada. Obrigado!');
+}
+
+/* ---------- avisos do grupo (criados pelo banco), já nos 3 idiomas ---------- */
+function sysText(m) {
+  const s = m.sys || {}, eu = id => id === P.id, g = typeof LANG !== 'undefined' ? LANG : 'pt', L = (a, b, c) => g === 'en' ? b : g === 'es' ? c : a;
+  const Y = L('Você', 'You', 'Tú'), A = eu(s.a) ? Y : (s.an || L('Alguém', 'Someone', 'Alguien')), U = s.un || L('Alguém', 'Someone', 'Alguien');
+  switch (s.t) {
+    case 'created': return A + L(' criou o grupo', ' created the group', ' creó el grupo');
+    case 'added': return eu(s.u) ? A + L(' adicionou você', ' added you', ' te añadió') : A + L(' adicionou ', ' added ', ' añadió a ') + U;
+    case 'removed': return eu(s.u) ? A + L(' removeu você', ' removed you', ' te quitó') : A + L(' removeu ', ' removed ', ' quitó a ') + U;
+    case 'left': return (eu(s.u) ? Y : U) + L(' saiu do grupo', ' left the group', ' salió del grupo');
+    case 'admin': return (eu(s.u) ? Y : U) + L(' agora é administrador', ' is now an admin', ' ahora es administrador');
+    case 'unadmin': return (eu(s.u) ? Y : U) + L(' deixou de ser administrador', ' is no longer an admin', ' dejó de ser administrador');
+    case 'owner': return (eu(s.u) ? Y : U) + L(' agora é o dono do grupo', ' is now the group owner', ' ahora es el dueño del grupo');
+    case 'renamed': return A + L(' mudou o nome do grupo para \u201c', ' changed the group name to \u201c', ' cambió el nombre del grupo a \u201c') + (s.name || '') + '\u201d';
+    case 'photo': return A + L(' mudou a foto do grupo', ' changed the group photo', ' cambió la foto del grupo');
+    case 'photo_removed': return A + L(' removeu a foto do grupo', ' removed the group photo', ' quitó la foto del grupo');
+  }
+  return L('Atualização do grupo', 'Group update', 'Actualización del grupo');
 }

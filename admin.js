@@ -7,11 +7,11 @@ try { if (!sessionStorage.getItem('ow-v')) { sessionStorage.setItem('ow-v', '1')
 function openAdmin(tab) {
   if (!P || !P.is_admin) return T('Acesso restrito aos administradores.');
   AD.tab = tab || AD.tab; go('other'); window.lastProfile = null; window.reloadOther = () => {}; $('#q').value = '';
-  const tabs = [['resumo', 'Resumo'], ['denuncias', 'Denúncias'], ['pedidos', 'Revisões'], ['usuarios', 'Usuários'], ['registro', 'Registro']];
+  const tabs = [['resumo', 'Resumo'], ['denuncias', 'Denúncias'], ['pedidos', 'Revisões'], ['suporte', 'Suporte'], ['usuarios', 'Usuários'], ['registro', 'Registro']];
   $('#v-other').innerHTML = backBtn('menu') + `<h2 class="font-bold text-xl px-1">Administração</h2>
   <div class="flex gap-2 overflow-x-auto pb-1">${tabs.map(([k, l]) => `<button class="btn2 !py-1.5 !px-3 whitespace-nowrap ${AD.tab === k ? 'sel' : ''}" onclick="openAdmin('${k}')">${l}</button>`).join('')}</div>
   <div id="ad-body" class="space-y-3"><div class="sk h-24"></div><div class="sk h-40"></div></div>`;
-  ({ resumo: adResumo, denuncias: adDenuncias, pedidos: adPedidos, usuarios: adUsuarios, registro: adRegistro })[AD.tab]();
+  ({ resumo: adResumo, denuncias: adDenuncias, pedidos: adPedidos, suporte: adSuporte, usuarios: adUsuarios, registro: adRegistro })[AD.tab]();
 }
 const adErr = e => errH(/does not exist|Could not find|schema cache/i.test(e.message || '') ? 'Falta rodar a migração 8 (ou a 7) no Supabase.' : e);
 const fmtB = b => b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : (b / 1e6).toFixed(1) + ' MB';
@@ -22,7 +22,7 @@ function bars(ser, key, title) {
   <div class="flex justify-between text-[10px] text-mut mt-1"><span>${(ser[0] || {}).day ? ser[0].day.slice(5) : ''}</span><span>hoje</span></div></div>`;
 }
 
-async function adResumo() {
+async function _adResumo() {
   const [a, b] = await Promise.all([sb.rpc('admin_stats'), sb.rpc('admin_series')]), el = $('#ad-body'); if (!el) return;
   if (a.error) { el.innerHTML = adErr(a.error); return }
   const s = a.data, ser = b.data || [];
@@ -139,7 +139,7 @@ function adUserMenu(id, pen, isAdm) {
 async function adRegistro() {
   const el = $('#ad-body'); if (!el) return; const { data, error } = await sb.rpc('admin_log_list'); if (!$('#ad-body')) return;
   if (error) { el.innerHTML = adErr(error); return }
-  const nm = { delete_post: 'apagou uma publicação', delete_story: 'apagou um story', ban: 'suspendeu uma conta', unban: 'reativou uma conta', apply_ban: 'bloqueou uma conta para sempre', apply_account: 'suspendeu uma conta', apply_messages: 'impediu alguém de enviar mensagens', apply_posts: 'impediu alguém de publicar', apply_comments: 'impediu alguém de comentar', lift: 'levantou penalidades', appeal_accepted: 'aceitou um pedido de revisão', appeal_denied: 'negou um pedido de revisão', make_admin: 'tornou alguém administrador', remove_admin: 'removeu um administrador', report_dismissed: 'descartou uma denúncia', report_resolved: 'resolveu uma denúncia', report_open: 'reabriu uma denúncia' };
+  const nm = { delete_post: 'apagou uma publicação', delete_story: 'apagou um story', ban: 'suspendeu uma conta', unban: 'reativou uma conta', apply_ban: 'bloqueou uma conta para sempre', support_reply: 'respondeu a um pedido de suporte', support_close: 'fechou um pedido de suporte', apply_account: 'suspendeu uma conta', apply_messages: 'impediu alguém de enviar mensagens', apply_posts: 'impediu alguém de publicar', apply_comments: 'impediu alguém de comentar', lift: 'levantou penalidades', appeal_accepted: 'aceitou um pedido de revisão', appeal_denied: 'negou um pedido de revisão', make_admin: 'tornou alguém administrador', remove_admin: 'removeu um administrador', report_dismissed: 'descartou uma denúncia', report_resolved: 'resolveu uma denúncia', report_open: 'reabriu uma denúncia' };
   el.innerHTML = `<div class="card divide-y divide-line overflow-hidden">${(data || []).map(l => `<div class="p-3"><div class="text-sm"><b>${E(l.admin)}</b> ${nm[l.action] || E(l.action)}</div>${l.details && l.details.body ? `<div class="text-xs text-mut truncate">“${E(l.details.body)}”</div>` : ''}${l.details && l.details.reason ? `<div class="text-xs text-mut">Motivo: ${E(l.details.reason)}${l.details.hours ? ' · ' + l.details.hours + ' h' : ''}</div>` : ''}<div class="text-[11px] text-mut">${ago(l.created_at)}</div></div>`).join('') || '<p class="p-8 text-center text-sm text-mut">Nenhuma ação registrada ainda.</p>'}</div>`;
 }
 
@@ -152,4 +152,27 @@ function adRepStory(r) {
   ${u.id ? `<div class="text-xs text-mut">Autor: <button class="font-semibold text-brand" onclick="showProfile('${u.id}')">${E(u.name)} (@${E(u.handle)})</button></div>` : ''}${prev}${s.media_url && s.caption ? `<p class="text-sm">${E(s.caption)}</p>` : ''}
   <div class="text-[11px] text-mut">Denunciado por ${E(who.name || '?')} (@${E(who.handle || '?')})${r.note ? ' · ' + E(r.note) : ''}</div>
   <div class="flex flex-wrap gap-2 pt-1">${open ? `<button class="btn !py-1.5 !px-3 text-xs" onclick="adDelStory('${s.id}','${r.id}')">Apagar story</button>${u.id ? `<button class="btn2 !py-1.5 !px-3 text-xs !text-brand" onclick="adPenalty('${u.id}','${r.id}')">Penalizar autor</button>` : ''}<button class="btn2 !py-1.5 !px-3 text-xs" onclick="adSetRep('${r.id}','dismissed')">Descartar</button><button class="btn2 !py-1.5 !px-3 text-xs" onclick="adSetRep('${r.id}','resolved')">Resolvida</button>` : `<button class="btn2 !py-1.5 !px-3 text-xs" onclick="adSetRep('${r.id}','open')">Reabrir</button>`}</div></div>`;
+}
+
+async function adResumo() {
+  await _adResumo(); const el = $('#ad-body'); if (!el || !el.querySelector('.grid')) return;
+  sb.rpc('admin_support', { p_status: 'open' }).then(({ data }) => { const g = el.querySelector('.grid'); if (g && data) g.insertAdjacentHTML('beforeend', stat('Pedidos de suporte', data.length, 'abertos')) });
+}
+
+/* ---------- suporte ---------- */
+AD.ss = 'open';
+async function adSuporte() {
+  const el = $('#ad-body'); if (!el) return;
+  const chips = [['open', 'Abertos'], ['answered', 'Respondidos'], ['closed', 'Fechados'], ['all', 'Todos']].map(([k, l]) => `<button class="btn2 !py-1 !px-3 text-xs ${AD.ss === k ? 'sel' : ''}" onclick="AD.ss='${k}';adSuporte()">${l}</button>`).join('');
+  const { data, error } = await sb.rpc('admin_support', { p_status: AD.ss }); if (!$('#ad-body')) return;
+  if (error) { el.innerHTML = adErr(error); return }
+  const cat = Object.fromEntries(SUP_CAT), st = { open: 'Aberto', answered: 'Respondido', closed: 'Fechado' };
+  el.innerHTML = `<div class="flex gap-2 overflow-x-auto">${chips}</div>` + ((data || []).map(t => `<div class="card p-3 space-y-2"><div class="flex items-center justify-between gap-2"><button class="text-sm font-semibold text-brand truncate" onclick="showProfile('${t.user.id}')">${E(t.user.name)} (@${E(t.user.handle)})</button><span class="text-[11px] text-mut shrink-0">${st[t.status]} · ${ago(t.created_at)}</span></div>
+   <div class="text-xs text-mut">${cat[t.category] || t.category}</div><div class="text-sm font-semibold">${E(t.subject)}</div><p class="text-sm whitespace-pre-wrap break-words bg-soft rounded-lg p-2">${E(t.message)}</p>
+   ${t.reply ? `<div class="text-xs text-mut"><b>Resposta:</b> ${E(t.reply)}</div>` : ''}
+   ${t.status !== 'closed' ? `<div class="flex flex-wrap gap-2"><button class="btn !py-1.5 !px-3 text-xs" onclick="adSupReply('${t.id}',false)">Responder</button><button class="btn2 !py-1.5 !px-3 text-xs" onclick="adSupReply('${t.id}',true)">Responder e fechar</button><button class="btn2 !py-1.5 !px-3 text-xs" onclick="adCall('admin_support_close',{p_id:'${t.id}'},'Pedido fechado.')">Fechar</button></div>` : ''}</div>`).join('') || '<p class="text-center text-sm text-mut py-10">Nenhum pedido aqui.</p>');
+}
+async function adSupReply(id, close) {
+  const v = await askText(close ? 'Responder e fechar o pedido' : 'Responder ao pedido', ''); if (!v) return;
+  await adCall('admin_support_reply', { p_id: id, p_reply: v, p_close: close }, close ? 'Resposta enviada e pedido fechado.' : 'Resposta enviada.');
 }

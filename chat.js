@@ -1,7 +1,7 @@
 /* OtaWeb · módulo de Mensagens (conversas privadas e grupos, tempo real) */
 let PRES = new Set();
 const CH = { list: [], open: null, msgs: [], votes: {}, pin: null, sel: [], users: {}, add: null, loaded: false, ch: null };
-const hhmm = t => new Date(t).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+const hhmm = t => new Date(t).toLocaleTimeString(window.LOCALE || 'pt-PT', { hour: '2-digit', minute: '2-digit' });
 const cAv = (c, s = 46) => c.is_group ? (c.avatar_url ? `<img src="${E(c.avatar_url)}" style="width:${s}px;height:${s}px" class="rounded-full object-cover shrink-0">` : `<div style="width:${s}px;height:${s}px" class="rounded-full bg-soft text-brand grid place-items-center shrink-0">${ic('users', false, Math.round(s * .45))}</div>`) : `<div class="relative shrink-0">${av(c.other, s)}${c.other && PRES.has(c.other.id) && !(typeof BLK !== 'undefined' && (BLK.has(c.other.id) || BLK_ME.has(c.other.id))) ? '<span class="absolute bottom-0 right-0 w-3 h-3 rounded-full" style="background:#22c55e;border:2px solid rgb(var(--card))"></span>' : ''}</div>`;
 const cName = c => c.is_group ? (c.name || 'Grupo') : (c.other ? c.other.name : 'Conversa');
 function cPrev(m, c) {

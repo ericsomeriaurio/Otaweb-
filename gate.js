@@ -1,6 +1,6 @@
 /* OtaWeb · estado da conta: bloqueio definitivo, suspensão com prazo e restrições parciais */
 window.RESTR = [];
-const fmtDT = t => new Date(t).toLocaleString('pt-PT', { dateStyle: 'short', timeStyle: 'short' });
+const fmtDT = t => new Date(t).toLocaleString(window.LOCALE || 'pt-PT', { dateStyle: 'short', timeStyle: 'short' });
 const SCOPE_TXT = { account: 'usar a conta', messages: 'enviar mensagens', posts: 'publicar', comments: 'comentar' };
 const SCOPE_LBL = { account: 'Conta suspensa', messages: 'Envio de mensagens', posts: 'Publicações', comments: 'Comentários' };
 const KINDS = [['mistake', 'Foi um engano'], ['not_violated', 'Não violei os termos'], ['understood', 'Entendi e não vou repetir'], ['other', 'Outro motivo']];
