@@ -60,7 +60,7 @@ async function startSession(ses) {
     if (error || !data) { T('Não consegui carregar seu perfil: ' + (error ? error.message : 'perfil não encontrado')); return }
     if (typeof gateCheck === 'function' && await gateCheck(data)) return;
     P = data; $('#auth').classList.add('hidden'); go('feed'); if (typeof restrBanner === 'function') restrBanner(); live(); loadBadge(); if (typeof chatLive === 'function') chatLive(); if (typeof socialStart === 'function') socialStart(); if (typeof storiesStart === 'function') storiesStart();
-    if (location.hash.startsWith('#u-')) openHandle(location.hash.slice(3));
+    if (location.hash.startsWith('#u-')) openHandle(location.hash.slice(3)); else if (location.hash.startsWith('#g-') && typeof openGuild === 'function') openGuild(location.hash.slice(3));
   } finally { startSession.busy = false }
 }
 function live() { if (live.on) return; live.on = true;
@@ -85,7 +85,7 @@ function go(v) {
   document.querySelectorAll('[data-nav]').forEach(e => e.classList.toggle('tab-on', e.dataset.nav === v));
   paintMe(); $('#main').scrollTop = 0;
   const f = { feed: () => { loadFeed(); if (typeof loadStories === 'function') loadStories() }, reels: loadReels, notif: loadNotifs, menu: renderMenu,
-    groups: () => soonV('groups', 'users', 'Guildas', 'Comunidades por anime, jogo ou tema, com nome único em toda a rede. Este módulo está em desenvolvimento.'),
+    groups: () => openGuilds(),
     msgs: openMsgs }[v];
   if (f) f();
 }
@@ -103,7 +103,7 @@ function setTheme(t) { localStorage.setItem('ow-theme', t); applyTheme(); render
 async function loadBadge() { const { count } = await sb.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', P.id).eq('read', false); document.querySelectorAll('.b-n').forEach(b => { b.textContent = count > 9 ? '9+' : count; b.classList.toggle('hidden', !count) }) }
 /* reels */
 async function loadReels() {
-  const { data } = await sb.from('posts').select(SEL).eq('media_type', 'video').order('created_at', { ascending: false }).limit(20); posts = await prep(data);
+  const { data } = await sb.from('posts').select(SEL).is('guild_id', null).eq('media_type', 'video').order('created_at', { ascending: false }).limit(20); posts = await prep(data);
   $('#v-reels').innerHTML = `<div id="rl" class="h-full overflow-y-scroll snap-y snap-mandatory bg-black md:max-w-sm md:mx-auto">` + (posts.map(reelH).join('') || '<div class="h-full grid place-items-center text-center text-sm text-white/70 p-8">Nenhum reel ainda.<br>Publique um vídeo e ele aparece aqui.</div>') + '</div>';
   const io = new IntersectionObserver(es => es.forEach(e => e.isIntersecting ? e.target.play().catch(() => {}) : e.target.pause()), { threshold: .7 }); document.querySelectorAll('#rl video').forEach(v => io.observe(v));
 }
@@ -148,7 +148,7 @@ const errH = e => `<p class="text-center text-xs text-brand py-8 px-4 break-word
 const safe = list => list.map(p => { try { return postH(p) } catch (e) { console.error(e); return '' } }).join('');
 async function loadFeed() {
   try {
-    const { data, error } = await sb.from('posts').select(SEL).order('created_at', { ascending: false }).limit(40);
+    const { data, error } = await sb.from('posts').select(SEL).is('guild_id', null).order('created_at', { ascending: false }).limit(40);
     if (error) { $('#posts').innerHTML = errH(error); return }
     posts = await prep(data);
     if (!posts.length) $('#posts').innerHTML = '<p class="text-center text-sm text-mut py-10">Nenhum post ainda. Seja o primeiro a postar!</p>'; else paint($('#posts'), posts);
@@ -213,6 +213,7 @@ function postMenu(id) {
   if (p.author.id === P.id) it.push([ic('edit') + ' Editar publicação', () => editPost(id)]);
   if (p.author.id === P.id) it.push([ic('trash') + ' Apagar publicação', async () => { await sb.from('posts').delete().eq('id', id); T('Publicação apagada.'); refresh() }]);
   else it.push([ic('flag') + ' Denunciar', () => reportModal({ post: id })]);
+  if (typeof postExtra === 'function') it.push(...postExtra(p));
   menu('Opções da publicação', it);
 }
 async function repost(id) { const v = await ask('Repostar na rede', ['Comentário (opcional)']); if (!v) return; await sb.from('posts').insert({ author: P.id, body: v[0], repost_of: id }); T('Repostado! 🔁'); refresh() }
@@ -231,6 +232,7 @@ function openSheet() {
     o.map(([k, i, t, d]) => `<button onclick="${k === 'story' ? 'openStoryCreate()' : `openCreate('${k}')`}" class="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-soft text-left"><span class="w-10 h-10 rounded-full bg-soft text-brand grid place-items-center">${ic(i, false, 20)}</span><span><span class="block text-sm font-semibold">${t}</span><span class="block text-xs text-mut">${d}</span></span></button>`).join(''));
 }
 function openCreate(kind) {
+  window.PUBG = window.GCTX || null; window.GCTX = null;
   file = null;
   modal(`<div class="flex items-center justify-between mb-3"><h3 class="font-bold text-lg">Nova publicação</h3><button class="circ" onclick="closeM()" aria-label="Fechar">${ic('x', false, 18)}</button></div>
   <div class="flex items-center gap-3 mb-3">${av(P, 40)}<div class="text-sm font-semibold">${E(P.name)}</div></div>
@@ -251,10 +253,10 @@ async function publish() {
   const body = $('#np').value.trim(), pq = $('#pollbox').classList.contains('hidden') ? '' : $('#pq').value.trim(), po = [0, 1, 2, 3].map(i => $('#po' + i).value.trim()).filter(Boolean), poll = pq && po.length >= 2;
   if (!body && !file && !poll) return T('Escreva algo, anexe uma mídia ou crie uma enquete.');
   $('#pub').disabled = true; let m = null; if (file) { T('Enviando mídia...'); m = await upload(file); if (!m) { $('#pub').disabled = false; return } }
-  const { data, error } = await sb.from('posts').insert({ author: P.id, body, media_url: m?.url, media_type: m?.type, poll_question: poll ? pq : null }).select().single();
+  const { data, error } = await sb.from('posts').insert({ author: P.id, body, media_url: m?.url, media_type: m?.type, poll_question: poll ? pq : null, guild_id: window.PUBG || null }).select().single();
   if (error) { T('Erro: ' + error.message); $('#pub').disabled = false; return }
   if (poll) await sb.from('poll_options').insert(po.map(label => ({ post_id: data.id, label })));
-  file = null; closeM(); T('Publicado!'); go('feed');
+  file = null; closeM(); T('Publicado!'); if (window.PUBG && typeof openGuild === 'function') { const gi = window.PUBG; window.PUBG = null; GD.gtab = 'mural'; openGuild(gi) } else go('feed');
 }
 
 /* ---------- PERFIL ---------- */
@@ -264,7 +266,7 @@ async function _showProfile(id) { window.lastProfile = id; window.reloadOther = 
   go('other'); const [{ data: u }, { count: seg }, { count: sing }, { data: f }, { data: ps }] = await Promise.all([
     sb.from('profiles').select('*').eq('id', id).single(), sb.from('follows').select('*', { count: 'exact', head: true }).eq('followee', id),
     sb.from('follows').select('*', { count: 'exact', head: true }).eq('follower', id), sb.from('follows').select('follower').match({ follower: P.id, followee: id }),
-    sb.from('posts').select(SEL).eq('author', id).order('created_at', { ascending: false }).limit(30)]);
+    sb.from('posts').select(SEL).is('guild_id', null).eq('author', id).order('created_at', { ascending: false }).limit(30)]);
   if (!u) { $('#v-other').innerHTML = '<p class="text-center text-sm text-mut py-10">Perfil não encontrado.</p>'; return } posts = await prep(ps); const mine = id === P.id, link = location.href.split('#')[0] + '#u-' + u.handle, fl = f && f.length;
   $('#v-other').classList.remove('hidden'); $('#v-feed').classList.add('hidden');
   $('#v-other').innerHTML = `<div class="card p-5 text-center space-y-2 pop"><div class="flex justify-center"><div class="ring"><div class="bg-card rounded-full p-1">${av(u, 92)}</div></div></div>
@@ -284,7 +286,7 @@ function debSearch(q) { clearTimeout(st); st = setTimeout(() => search(q.trim())
 async function search(q) { try { await _search(q) } catch (e) { $('#v-other').innerHTML = errH(e) } }
 async function _search(q) {
   if (!q) return go('feed'); go('other'); $('#v-feed').classList.add('hidden'); $('#v-other').classList.remove('hidden'); const s = q.replace(/[%,()]/g, ' ');
-  const [{ data: u }, { data: ps, error: pe }] = await Promise.all([sb.from('profiles').select('id,name,handle,avatar_url').or(`name.ilike.%${s}%,handle.ilike.%${s}%`).limit(10), sb.from('posts').select(SEL).ilike('body', `%${s}%`).order('created_at', { ascending: false }).limit(20)]);
+  const [{ data: u }, { data: ps, error: pe }] = await Promise.all([sb.from('profiles').select('id,name,handle,avatar_url').or(`name.ilike.%${s}%,handle.ilike.%${s}%`).limit(10), sb.from('posts').select(SEL).is('guild_id', null).ilike('body', `%${s}%`).order('created_at', { ascending: false }).limit(20)]);
   posts = await prep(ps);
   $('#v-other').innerHTML = `<h3 class="text-sm font-bold text-brand">Pessoas</h3>` + ((u || []).map(x => `<button onclick="showProfile('${x.id}')" class="card w-full flex items-center gap-3 p-3 text-left">${av(x)}<div><div class="text-sm font-bold">${E(x.name)}</div><div class="text-[11px] text-mut">@${E(x.handle)}</div></div></button>`).join('') || '<p class="text-xs text-mut">Ninguém encontrado.</p>') +
     `<h3 class="text-sm font-bold text-brand">Publicações</h3>` + (pe ? errH(pe) : (safe(posts) || '<p class="text-xs text-mut">Nada encontrado.</p>'));

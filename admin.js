@@ -78,6 +78,7 @@ function evidenceH(r) {
 }
 function adRep(r) {
   if (r.story) return adRepStory(r);
+  if (r.guild) return adRepGuild(r);
   const kind = r.message_id ? 'Mensagem' : r.post ? 'Publicação' : r.chat ? (r.chat.is_group ? 'Grupo' : 'Conversa') : 'Usuário', open = r.status === 'open', who = r.reporter || {};
   const st = { open: 'Aberta', resolved: 'Resolvida', dismissed: 'Descartada' }[r.status]; let body = '', acts = '';
   if (r.post) {
@@ -139,7 +140,7 @@ function adUserMenu(id, pen, isAdm) {
 async function adRegistro() {
   const el = $('#ad-body'); if (!el) return; const { data, error } = await sb.rpc('admin_log_list'); if (!$('#ad-body')) return;
   if (error) { el.innerHTML = adErr(error); return }
-  const nm = { delete_post: 'apagou uma publicação', delete_story: 'apagou um story', ban: 'suspendeu uma conta', unban: 'reativou uma conta', apply_ban: 'bloqueou uma conta para sempre', support_reply: 'respondeu a um pedido de suporte', support_close: 'fechou um pedido de suporte', apply_account: 'suspendeu uma conta', apply_messages: 'impediu alguém de enviar mensagens', apply_posts: 'impediu alguém de publicar', apply_comments: 'impediu alguém de comentar', lift: 'levantou penalidades', appeal_accepted: 'aceitou um pedido de revisão', appeal_denied: 'negou um pedido de revisão', make_admin: 'tornou alguém administrador', remove_admin: 'removeu um administrador', report_dismissed: 'descartou uma denúncia', report_resolved: 'resolveu uma denúncia', report_open: 'reabriu uma denúncia' };
+  const nm = { delete_post: 'apagou uma publicação', delete_story: 'apagou um story', delete_guild: 'excluiu uma guilda', ban: 'suspendeu uma conta', unban: 'reativou uma conta', apply_ban: 'bloqueou uma conta para sempre', support_reply: 'respondeu a um pedido de suporte', support_close: 'fechou um pedido de suporte', apply_account: 'suspendeu uma conta', apply_messages: 'impediu alguém de enviar mensagens', apply_posts: 'impediu alguém de publicar', apply_comments: 'impediu alguém de comentar', lift: 'levantou penalidades', appeal_accepted: 'aceitou um pedido de revisão', appeal_denied: 'negou um pedido de revisão', make_admin: 'tornou alguém administrador', remove_admin: 'removeu um administrador', report_dismissed: 'descartou uma denúncia', report_resolved: 'resolveu uma denúncia', report_open: 'reabriu uma denúncia' };
   el.innerHTML = `<div class="card divide-y divide-line overflow-hidden">${(data || []).map(l => `<div class="p-3"><div class="text-sm"><b>${E(l.admin)}</b> ${nm[l.action] || E(l.action)}</div>${l.details && l.details.body ? `<div class="text-xs text-mut truncate">“${E(l.details.body)}”</div>` : ''}${l.details && l.details.reason ? `<div class="text-xs text-mut">Motivo: ${E(l.details.reason)}${l.details.hours ? ' · ' + l.details.hours + ' h' : ''}</div>` : ''}<div class="text-[11px] text-mut">${ago(l.created_at)}</div></div>`).join('') || '<p class="p-8 text-center text-sm text-mut">Nenhuma ação registrada ainda.</p>'}</div>`;
 }
 
@@ -175,4 +176,14 @@ async function adSuporte() {
 async function adSupReply(id, close) {
   const v = await askText(close ? 'Responder e fechar o pedido' : 'Responder ao pedido', ''); if (!v) return;
   await adCall('admin_support_reply', { p_id: id, p_reply: v, p_close: close }, close ? 'Resposta enviada e pedido fechado.' : 'Resposta enviada.');
+}
+
+/* ---------- denúncia de guilda ---------- */
+const adDelGuild = (gid, rid) => confirmBox('Excluir guilda?', 'A guilda, o mural e o salão somem para todos. Não dá para desfazer.', 'Excluir', () => adCall('admin_delete_guild', { p_id: gid, p_report: rid || null }, 'Guilda excluída.'));
+function adRepGuild(r) {
+  const g = r.guild, who = r.reporter || {}, open = r.status === 'open', st = { open: 'Aberta', resolved: 'Resolvida', dismissed: 'Descartada' }[r.status];
+  return `<div class="card p-3 space-y-2"><div class="flex items-center justify-between gap-2"><span class="text-xs font-bold text-brand">Guilda · ${E(r.reason || 'sem motivo')}</span><span class="text-[11px] text-mut">${st} · ${ago(r.created_at)}</span></div>
+  <div class="text-sm font-semibold">${E(g.name)} <span class="text-xs font-normal text-mut">· ${g.members} membros</span></div>${g.description ? `<p class="text-sm text-mut whitespace-pre-wrap break-words">${E(g.description)}</p>` : ''}
+  <div class="text-[11px] text-mut">Denunciada por ${E(who.name || '?')} (@${E(who.handle || '?')})${r.note ? ' · ' + E(r.note) : ''}</div>
+  <div class="flex flex-wrap gap-2 pt-1">${open ? `<button class="btn2 !py-1.5 !px-3 text-xs" onclick="openGuild('${g.id}')">Ver guilda</button><button class="btn !py-1.5 !px-3 text-xs" onclick="adDelGuild('${g.id}','${r.id}')">Excluir guilda</button><button class="btn2 !py-1.5 !px-3 text-xs !text-brand" onclick="adPenalty('${g.owner_id}','${r.id}')">Penalizar líder</button><button class="btn2 !py-1.5 !px-3 text-xs" onclick="adSetRep('${r.id}','dismissed')">Descartar</button><button class="btn2 !py-1.5 !px-3 text-xs" onclick="adSetRep('${r.id}','resolved')">Resolvida</button>` : `<button class="btn2 !py-1.5 !px-3 text-xs" onclick="adSetRep('${r.id}','open')">Reabrir</button>`}</div></div>`;
 }
