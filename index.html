@@ -8,6 +8,25 @@
 addEventListener('error',function(e){var t=e.target;show(t&&(t.src||t.href)?'não carregou '+(t.src||t.href):e.message)},true);
 addEventListener('unhandledrejection',function(e){show(String(e.reason&&e.reason.message||e.reason))})})();
 </script>
+<script>
+/* compatibilidade com navegadores antigos (Android com Chrome/WebView desatualizado) */
+(function(){
+ var E=Element.prototype,A=Array.prototype,S=String.prototype;
+ if(!E.replaceChildren)E.replaceChildren=function(){while(this.firstChild)this.removeChild(this.firstChild);for(var i=0;i<arguments.length;i++){var n=arguments[i];this.appendChild(typeof n==='string'?document.createTextNode(n):n)}};
+ if(!S.replaceAll)S.replaceAll=function(a,b){return typeof a==='string'?this.split(a).join(b):this.replace(a,b)};
+ if(!Object.fromEntries)Object.fromEntries=function(it){var o={};for(var e of it)o[e[0]]=e[1];return o};
+ if(!Promise.allSettled)Promise.allSettled=function(ps){return Promise.all(ps.map(function(p){return Promise.resolve(p).then(function(v){return{status:'fulfilled',value:v}},function(r){return{status:'rejected',reason:r}})}))};
+ if(!A.at)A.at=function(i){i=Math.trunc(i)||0;if(i<0)i+=this.length;return this[i]};
+ if(!A.flat)A.flat=function(){return A.concat.apply([],this)};
+ if(!(window.crypto&&crypto.randomUUID)&&window.crypto)crypto.randomUUID=function(){return'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=crypto.getRandomValues(new Uint8Array(1))[0]&15;return(c==='x'?r:(r&3|8)).toString(16)})};
+ if(!window.fetch||!window.Promise||!window.MutationObserver||!window.IntersectionObserver){
+  document.addEventListener('DOMContentLoaded',function(){document.body.innerHTML='<div style="font-family:sans-serif;padding:32px;text-align:center;color:#444"><h2 style="color:#7a1633">OtaWeb</h2><p>Seu navegador é muito antigo para abrir a rede.</p><p>Atualize o Chrome (ou o Android System WebView) na Play Store e tente de novo.</p></div>'});
+ }
+})();
+</script>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
@@ -107,17 +126,17 @@ body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:
 <div id="modal" class="hidden fixed inset-0 z-50 bg-black/60 grid place-items-center p-4 overflow-auto" onclick="if(event.target===this)closeM()"></div>
 <div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[60] card px-4 py-2.5 text-sm pop shadow-lg"></div>
 
-<script src="config.js?v=16"></script>
-<script src="i18n.js?v=16"></script>
-<script src="icons.js?v=16"></script>
-<script src="app.js?v=16"></script>
-<script src="chat.js?v=16"></script>
-<script src="chat2.js?v=16"></script>
-<script src="social.js?v=16"></script>
-<script src="extras.js?v=16"></script>
-<script src="stories.js?v=16"></script>
-<script src="guilds.js?v=16"></script>
-<script src="support.js?v=16"></script>
-<script src="gate.js?v=16"></script>
-<script src="admin.js?v=16"></script>
+<script src="config.js?v=17"></script>
+<script src="i18n.js?v=17"></script>
+<script src="icons.js?v=17"></script>
+<script src="app.js?v=17"></script>
+<script src="chat.js?v=17"></script>
+<script src="chat2.js?v=17"></script>
+<script src="social.js?v=17"></script>
+<script src="extras.js?v=17"></script>
+<script src="stories.js?v=17"></script>
+<script src="guilds.js?v=17"></script>
+<script src="support.js?v=17"></script>
+<script src="gate.js?v=17"></script>
+<script src="admin.js?v=17"></script>
 </body></html>

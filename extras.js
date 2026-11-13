@@ -10,7 +10,7 @@ function forgot() {
 }
 async function sendReset() {
   const e = $('#fg-e').value.trim(); if (!e) return T('Digite seu e-mail.');
-  const { error } = await sb.auth.resetPasswordForEmail(e, { redirectTo: location.origin + location.pathname });
+  const { error } = await sb.auth.resetPasswordForEmail(e, { redirectTo: window.SITE_BASE || (location.origin + location.pathname) });
   if (error) return T('Não enviou: ' + error.message);
   closeM(); T('Se esse e-mail tiver conta, o link foi enviado. Veja também o spam.');
 }
@@ -52,12 +52,12 @@ function mnPick(h) {
 async function loadNotifs() {
   const { data, error } = await sb.from('notifications').select('id,type,read,ref_id,created_at,actor:profiles!actor(id,name,handle,avatar_url)').eq('user_id', P.id).order('created_at', { ascending: false }).limit(50);
   if (error) { $('#v-notif').innerHTML = errH(error); return }
-  const tx = { like: 'reagiu à sua publicação', comment: 'comentou na sua publicação', reply: 'respondeu ao seu comentário', follow: 'começou a seguir você', mention: 'mencionou você', mention_all: 'mencionou todos os seguidores', story_react: 'reagiu ao seu story', support_reply: 'respondeu ao seu pedido de suporte', guild_request: 'pediu para entrar na sua guilda', guild_approved: 'aprovou seu pedido para entrar na guilda' }, ico = { like: 'heart', comment: 'msgc', reply: 'msgc', follow: 'user', mention: 'at', mention_all: 'at', story_react: 'heart', support_reply: 'msgc', guild_request: 'users', guild_approved: 'users' };
+  const tx = { like: 'reagiu à sua publicação', comment: 'comentou na sua publicação', reply: 'respondeu ao seu comentário', follow: 'começou a seguir você', mention: 'mencionou você', mention_all: 'mencionou todos os seguidores', story_react: 'reagiu ao seu story', support_reply: 'respondeu ao seu pedido de suporte', guild_request: 'pediu para entrar na sua guilda', guild_approved: 'aprovou seu pedido para entrar na guilda', guild_invite: 'convidou você para uma guilda', guild_invite_accepted: 'aceitou seu convite para a guilda' }, ico = { like: 'heart', comment: 'msgc', reply: 'msgc', follow: 'user', mention: 'at', mention_all: 'at', story_react: 'heart', support_reply: 'msgc', guild_request: 'users', guild_approved: 'users', guild_invite: 'users', guild_invite_accepted: 'users' };
   $('#v-notif').innerHTML = `<div class="max-w-xl mx-auto p-3 md:py-5"><h2 class="font-bold text-xl mb-3 px-1">Notificações</h2><div class="card divide-y divide-line overflow-hidden">` +
     ((data || []).filter(n => n.actor).map(n => `<button class="w-full flex items-center gap-3 p-3 text-left hover:bg-soft transition ${n.read ? '' : 'bg-brand/10'}" onclick="openNotif('${n.type}','${n.ref_id || ''}','${n.actor.id}')"><span class="relative shrink-0">${av(n.actor, 46)}<span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-brand text-white grid place-items-center ring-2 ring-card">${ic(ico[n.type] || 'bell', n.type === 'like', 11)}</span></span><div class="text-sm flex-1 min-w-0"><b>${E(n.actor.name)}</b> ${tx[n.type] || 'interagiu com você'}<div class="text-xs text-mut mt-0.5">${ago(n.created_at)}</div></div></button>`).join('') || '<p class="p-10 text-center text-sm text-mut">Nenhuma notificação por enquanto.</p>') + '</div></div>';
   if ((data || []).some(n => !n.read)) { await sb.from('notifications').update({ read: true }).eq('user_id', P.id).eq('read', false); loadBadge() }
 }
-function openNotif(type, ref, actor) { if (type === 'guild_request' || type === 'guild_approved') return openGuild(ref); if (type === 'support_reply') return openSupport(ref); if (type === 'story_react') return openOwnStories(ref); if (type === 'follow' || !ref) return showProfile(actor); showPost(ref, type === 'comment' || type === 'reply') }
+function openNotif(type, ref, actor) { if (type === 'guild_request' || type === 'guild_approved' || type === 'guild_invite' || type === 'guild_invite_accepted') return openGuild(ref); if (type === 'support_reply') return openSupport(ref); if (type === 'story_react') return openOwnStories(ref); if (type === 'follow' || !ref) return showProfile(actor); showPost(ref, type === 'comment' || type === 'reply') }
 async function showPost(id, withC) {
   go('other'); window.lastProfile = null; window.reloadOther = () => showPost(id); $('#q').value = '';
   const el = $('#v-other'); el.innerHTML = backBtn('notif') + '<div class="sk h-48"></div>';

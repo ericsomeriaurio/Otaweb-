@@ -5,7 +5,7 @@ const TIERS = [[400, 'Lenda'], [150, 'Elite'], [50, 'Veterano'], [10, 'Aventurei
 const tierOf = xp => TIERS.find(t => xp >= t[0]), nextTier = xp => [...TIERS].reverse().find(t => t[0] > xp);
 const GD = { tab: 'minhas', cat: '', q: '', g: null, gtab: 'mural', rk: [], t: null };
 let GF = {};
-const gcol = g => GCOL[g.color] || GCOL.wine, isOff = g => ['owner', 'officer'].includes(g.my_role), gLink = g => location.href.split('#')[0] + '#g-' + g.slug;
+const gcol = g => GCOL[g.color] || GCOL.wine, isOff = g => ['owner', 'officer'].includes(g.my_role), gLink = g => (window.SITE_BASE || location.href.split('#')[0]) + '#g-' + g.slug;
 const gBanner = g => g.banner_url ? `background:url('${E(g.banner_url)}') center/cover` : `background:linear-gradient(135deg,${gcol(g)},${gcol(g)}88)`;
 const gEmblem = (g, s) => g.emblem_url ? `<img src="${E(g.emblem_url)}" style="width:${s}px;height:${s}px" class="rounded-xl object-cover shrink-0 ring-2 ring-card" alt="">` : `<span style="width:${s}px;height:${s}px;background:${gcol(g)};font-size:${Math.round(s * .42)}px" class="rounded-xl grid place-items-center text-white font-bold shrink-0 ring-2 ring-card">${E((g.name || '?')[0].toUpperCase())}</span>`;
 const gMissing = e => /does not exist|schema cache|Could not find/.test(e.message || '');
@@ -45,14 +45,14 @@ async function openGuild(key) {
 }
 function gActions(g) {
   const st = g.my_status;
-  if (st === 'active') return `<button class="btn" onclick="guildHall()">${ic('msgc', false, 16)}Salão da guilda</button><button class="btn2" onclick="guildLeave()">Sair da guilda</button>`;
+  if (st === 'active') return `<button class="btn" onclick="guildHall()">${ic('msgc', false, 16)}Salão da guilda</button>${!g.is_private || isOff(g) ? `<button class="btn2" onclick="guildInvite()">${ic('users', false, 16)}Convidar</button>` : ''}<button class="btn2" onclick="guildLeave()">Sair da guilda</button>`;
   if (st === 'pending') return '<span class="text-xs font-semibold bg-soft rounded-full px-3 py-2">Pedido enviado</span><button class="btn2" onclick="guildLeave()">Cancelar pedido</button>';
   if (st === 'banned') return '<span class="text-xs text-mut">Você não pode entrar nesta guilda</span>';
   return `<button class="btn" onclick="guildJoin('${g.id}')">${g.is_private ? 'Pedir para entrar' : 'Entrar na guilda'}</button>`;
 }
 function drawGuild() {
   const g = GD.g, c = gcol(g), tabs = [['mural', 'Mural'], ['membros', 'Membros'], ['destaques', 'Destaques'], ['sobre', 'Sobre']];
-  $('#v-other').innerHTML = backBtn('groups') + `<div class="card overflow-hidden"><div class="h-28" style="${gBanner(g)}"></div>
+  $('#v-other').innerHTML = backBtn('groups') + (g.invite ? inviteBanner(g) : '') + `<div class="card overflow-hidden"><div class="h-28" style="${gBanner(g)}"></div>
   <div class="px-4 pb-4 -mt-9"><div class="flex items-end gap-3">${gEmblem(g, 76)}<div class="min-w-0 flex-1 pb-1"><h2 class="font-bold text-xl leading-tight break-words">${E(g.name)}</h2>
    <div class="flex flex-wrap gap-1.5 mt-1 text-[11px] font-semibold"><span class="rounded-full px-2 py-0.5 text-white" style="background:${c}">${GCATS[g.category]}</span><span class="rounded-full px-2 py-0.5 bg-soft text-mut">${ic(g.is_private ? 'lock' : 'globe', false, 11)} ${g.is_private ? 'Privada' : 'Pública'}</span><span class="rounded-full px-2 py-0.5 bg-soft text-mut">${g.members} membros</span></div></div>
    <button class="circ shrink-0" onclick="gMenu()" aria-label="Mais opções">${ic('more', false, 20)}</button></div>
@@ -125,7 +125,7 @@ async function gDestaques() {
     <div class="h-2 rounded-full bg-soft overflow-hidden"><div class="h-full rounded-full" style="width:${pc}%;background:${c}"></div></div><div class="text-xs text-mut">${n ? 'Faltam ' + (n[0] - me.xp) + ' XP para ' + n[1] : 'Você chegou ao topo!'}</div></div>`; }
   box.innerHTML = mine + `<div class="card p-3 space-y-2"><div class="text-sm font-semibold flex items-center gap-2"><span class="text-brand">${ic('trophy', false, 18)}</span>Destaques do mês</div>` +
     (top.map((u, i) => `<div class="flex items-center gap-3"><span class="w-6 text-center font-bold ${i === 0 ? 'text-brand' : 'text-mut'}">${i + 1}</span><button onclick="showProfile('${u.id}')" aria-label="Ver perfil">${av(u, 36)}</button><span class="flex-1 min-w-0 text-sm font-semibold truncate">${E(u.name)}</span><span class="text-xs text-mut">${u.month} XP</span></div>`).join('') || '<p class="text-sm text-mut text-center py-4">Ninguém pontuou este mês ainda. Publique e comente para aparecer aqui!</p>') + '</div>' +
-    `<div class="card p-3 space-y-2"><div class="text-sm font-semibold">Como ganhar XP</div><div class="text-xs text-mut space-y-1"><div>Publicar: +5 XP</div><div>Comentar: +2 XP</div><div>Receber uma reação: +1 XP</div></div>
+    `<div class="card p-3 space-y-2"><div class="text-sm font-semibold">Como ganhar XP</div><div class="text-xs text-mut space-y-1"><div>Publicar: +5 XP</div><div>Comentar: +2 XP</div><div>Receber uma reação: +1 XP</div><div>Recrutar quem aceitar seu convite: +10 XP (até 5 por guilda)</div></div>
     <div class="flex flex-wrap gap-1.5 pt-1">${[...TIERS].reverse().map(t => `<span class="text-[11px] rounded-full bg-soft px-2.5 py-1"><b>${t[1]}</b> <span class="text-mut">${t[0]} XP</span></span>`).join('')}</div></div>`;
 }
 
@@ -199,3 +199,34 @@ _search = async function (q) {
   const { data } = await sb.rpc('guild_directory', { p_q: q, p_cat: null, p_mine: false, p_limit: 4 }), el = $('#v-other');
   if (data && data.length && el) el.insertAdjacentHTML('afterbegin', '<h3 class="text-sm font-bold text-brand">Guildas</h3>' + data.map(g => `<button class="card w-full flex items-center gap-3 p-3 text-left" onclick="openGuild('${g.id}')">${gEmblem(g, 44)}<span class="min-w-0 flex-1"><span class="block text-sm font-semibold truncate">${E(g.name)}</span><span class="block text-xs text-mut"><span>${GCATS[g.category]}</span> · <span>${g.members} membros</span></span></span></button>`).join(''));
 };
+
+/* ---------- convidar e recrutar ---------- */
+const inviteBanner = g => `<div class="card p-4 flex items-center gap-3 border-brand/50"><span class="text-brand shrink-0">${ic('users', false, 22)}</span><div class="flex-1 text-sm"><b>${E(g.invite.inviter.name)}</b> convidou você para esta guilda</div>
+  <button class="btn !py-1.5 !px-3 text-xs" onclick="guildAnswer(true)">Aceitar</button><button class="btn2 !py-1.5 !px-3 text-xs" onclick="guildAnswer(false)">Recusar</button></div>`;
+async function guildAnswer(accept) {
+  const { error } = await sb.rpc('guild_invite_answer', { p_guild: GD.g.id, p_accept: accept }); if (error) return T(gMissing(error) ? 'Falta rodar a migração 13 no Supabase.' : error.message);
+  T(accept ? 'Convite aceito! Você entrou na guilda.' : 'Convite recusado.'); openGuild(GD.g.id);
+}
+async function guildInvite() {
+  const g = GD.g; if (g.is_private && !isOff(g)) return T('Só líder e oficiais podem convidar para guildas privadas');
+  const { data } = await sb.rpc('guild_invite_state', { p_guild: g.id }); GD.inv = new Set(data || []);
+  modal(`<div class="flex items-center justify-between mb-3"><h3 class="font-bold text-lg">Convidar para a guilda</h3><button class="circ" onclick="closeM()" aria-label="Fechar">${ic('x', false, 18)}</button></div>
+  <div class="grid grid-cols-2 gap-2 mb-3"><button class="btn2" onclick="copy('${E(gLink(g))}')">${ic('link', false, 16)}Copiar link</button><button class="btn2" onclick="guildShare()">${ic('share', false, 16)}Compartilhar</button></div>
+  <div class="text-xs text-mut mb-3">Quem aceitar o seu convite rende +10 XP de recrutamento (até 5 pessoas por guilda).</div>
+  <input id="gi-q" class="inp mb-2" placeholder="Buscar por nome ou @usuário" oninput="clearTimeout(GD.t);GD.t=setTimeout(giSearch,300)" autocomplete="off"><div id="gi-res" class="space-y-1 max-h-64 overflow-y-auto"></div>`);
+  giSearch();
+}
+async function giSearch() {
+  const q = ($('#gi-q') ? $('#gi-q').value : '').trim().replace(/[%,()]/g, ' '), box = $('#gi-res'); if (!box) return;
+  let r = sb.from('profiles').select('id,name,handle,avatar_url').neq('id', P.id).limit(15); r = q ? r.or(`name.ilike.%${q}%,handle.ilike.%${q}%`) : r.order('created_at', { ascending: false });
+  const { data } = await r; if (!$('#gi-res')) return;
+  box.innerHTML = (data || []).map(u => `<div class="flex items-center gap-3 p-2">${av(u, 40)}<div class="flex-1 min-w-0"><div class="text-sm font-semibold truncate">${E(u.name)}</div><div class="text-xs text-mut">@${E(u.handle)}</div></div>${GD.inv.has(u.id) ? '<span class="text-xs text-mut">Já na guilda ou convidado</span>' : `<button class="btn !py-1.5 !px-3 text-xs" onclick="giSend('${u.id}',this)">Convidar</button>`}</div>`).join('') || '<p class="text-xs text-mut text-center py-4">Ninguém encontrado.</p>';
+}
+async function giSend(id, b) {
+  b.disabled = true; const { error } = await sb.rpc('guild_invite', { p_guild: GD.g.id, p_user: id });
+  if (error) { b.disabled = false; return T(gMissing(error) ? 'Falta rodar a migração 13 no Supabase.' : error.message) }
+  GD.inv.add(id); b.outerHTML = '<span class="text-xs text-mut">Convidado</span>'; T('Convite enviado!');
+}
+async function guildShare() {
+  const g = GD.g, url = gLink(g); try { await navigator.share({ title: g.name, text: g.name + ' · OtaWeb', url }) } catch (e) { copy(url) }
+}

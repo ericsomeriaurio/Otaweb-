@@ -219,7 +219,7 @@ function postMenu(id) {
 async function repost(id) { const v = await ask('Repostar na rede', ['Comentário (opcional)']); if (!v) return; await sb.from('posts').insert({ author: P.id, body: v[0], repost_of: id }); T('Repostado! 🔁'); refresh() }
 async function vote(pid, oid) { const { error } = await sb.from('poll_votes').upsert({ post_id: pid, user_id: P.id, option_id: oid }, { onConflict: 'post_id,user_id' }); if (error) T('Erro ao votar.'); refresh() }
 function share(id) {
-  const p = posts.find(x => x.id === id), url = location.href.split('#')[0], txt = (p.body || 'Veja no OtaWeb') + ' — @' + p.author.handle;
+  const p = posts.find(x => x.id === id), url = (window.SITE_BASE || location.href.split('#')[0]), txt = (p.body || 'Veja no OtaWeb') + ' — @' + p.author.handle;
   menu('Compartilhar', [[ic('link') + ' Copiar link', () => copy(url)], [ic('share') + ' Compartilhar fora da rede', async () => { try { await navigator.share({ title: 'OtaWeb', text: txt, url }) } catch (e) { copy(txt + ' ' + url) } }], [ic('repeat') + ' Repostar na rede', () => repost(id)]]);
 }
 
@@ -267,7 +267,7 @@ async function _showProfile(id) { window.lastProfile = id; window.reloadOther = 
     sb.from('profiles').select('*').eq('id', id).single(), sb.from('follows').select('*', { count: 'exact', head: true }).eq('followee', id),
     sb.from('follows').select('*', { count: 'exact', head: true }).eq('follower', id), sb.from('follows').select('follower').match({ follower: P.id, followee: id }),
     sb.from('posts').select(SEL).is('guild_id', null).eq('author', id).order('created_at', { ascending: false }).limit(30)]);
-  if (!u) { $('#v-other').innerHTML = '<p class="text-center text-sm text-mut py-10">Perfil não encontrado.</p>'; return } posts = await prep(ps); const mine = id === P.id, link = location.href.split('#')[0] + '#u-' + u.handle, fl = f && f.length;
+  if (!u) { $('#v-other').innerHTML = '<p class="text-center text-sm text-mut py-10">Perfil não encontrado.</p>'; return } posts = await prep(ps); const mine = id === P.id, link = (window.SITE_BASE || location.href.split('#')[0]) + '#u-' + u.handle, fl = f && f.length;
   $('#v-other').classList.remove('hidden'); $('#v-feed').classList.add('hidden');
   $('#v-other').innerHTML = `<div class="card p-5 text-center space-y-2 pop"><div class="flex justify-center"><div class="ring"><div class="bg-card rounded-full p-1">${av(u, 92)}</div></div></div>
   <div class="text-lg font-bold">${E(u.name)}</div><div class="text-xs text-brand">@${E(u.handle)}</div><p class="text-sm text-mut">${E(u.bio || '')}</p>${u.fav_anime ? `<div class="text-xs text-brand">${ic('star', true, 13)} ${E(u.fav_anime)}</div>` : ''}
