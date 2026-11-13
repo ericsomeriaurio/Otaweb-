@@ -1,0 +1,94 @@
+# Cole este conteúdo em um arquivo chamado  .github/workflows/gerar-apk.yml  no seu repositório.
+# Depois: aba Actions > "Gerar APK do OtaWeb" > Run workflow. O APK aparece na aba Releases.
+name: Gerar APK do OtaWeb
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Baixar os arquivos do site
+        uses: actions/checkout@v4
+
+      - name: Conferir se todos os arquivos necessários foram enviados
+        run: |
+          faltou=0
+          for f in index.html config.js app.js chat.js chat2.js social.js extras.js stories.js guilds.js support.js gate.js admin.js i18n.js icons.js manifest.webmanifest icon-192.png icon-512.png maskable-512.png package.json capacitor.config.json make_android_icons.py android-debug-keystore.b64; do
+            if [ ! -f "$f" ]; then echo "FALTOU ENVIAR O ARQUIVO: $f"; faltou=1; fi
+          done
+          exit $faltou
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Montar a pasta do app
+        run: |
+          rm -rf www && mkdir -p www/vendor
+          cp index.html *.js manifest.webmanifest icon-192.png icon-512.png maskable-512.png www/
+
+      - name: Baixar as bibliotecas para dentro do app (abre mais rápido e não depende de CDN)
+        run: |
+          curl -fsSL -o www/vendor/tailwind.js "https://cdn.tailwindcss.com/3.4.17"
+          curl -fsSL -o www/vendor/supabase.js "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"
+          sed -i 's#https://cdn.tailwindcss.com/3.4.17#vendor/tailwind.js#; s#https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js#vendor/supabase.js#' www/index.html
+          echo "Referências locais no index.html:" && grep -c "vendor/" www/index.html
+
+      - name: Compatibilidade com celulares antigos (converte o JavaScript para navegadores mais velhos)
+        run: |
+          for f in www/*.js www/vendor/supabase.js; do
+            if npx --yes esbuild@0.21.5 "$f" --target=chrome61 --log-level=warning --outfile="$f.out"; then mv "$f.out" "$f"; else echo "aviso: não foi possível converter $f (segue o original)"; rm -f "$f.out"; fi
+          done
+
+      - name: Instalar o Capacitor e criar o projeto Android
+        run: |
+          npm install --no-audit --no-fund
+          npx cap add android
+          npx cap sync android
+
+      - name: Ícone, cores, permissões e chave de assinatura
+        run: |
+          pip install pillow
+          python make_android_icons.py android/app/src/main/res
+          sed -i 's/#FFFFFF/#7A1633/I' android/app/src/main/res/values/ic_launcher_background.xml || true
+          sed -i 's#<uses-permission android:name="android.permission.INTERNET" />#&\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />#' android/app/src/main/AndroidManifest.xml
+          mkdir -p ~/.android
+          base64 -d android-debug-keystore.b64 > ~/.android/debug.keystore
+
+      - name: Compilar o APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Preparar o arquivo
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk OtaWeb.apk
+
+      - name: Guardar uma cópia nos resultados da execução
+        uses: actions/upload-artifact@v4
+        with:
+          name: OtaWeb-apk
+          path: OtaWeb.apk
+
+      - name: Publicar o APK para baixar (aba Releases)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "apk-${{ github.run_number }}" OtaWeb.apk \
+            --title "OtaWeb APK ${{ github.run_number }}" \
+            --notes "App Android do OtaWeb. Baixe o arquivo OtaWeb.apk e instale no celular."
