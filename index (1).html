@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#7a1633">
+<title>OtaWeb</title>
+<script>
+(function(){function show(m){var b=document.getElementById('err');if(!b){b=document.createElement('div');b.id='err';b.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:99;background:#7a1633;color:#fff;font:12px/1.4 system-ui,sans-serif;padding:10px 12px;word-break:break-all';document.documentElement.appendChild(b)}b.textContent='Erro: '+m}
+addEventListener('error',function(e){var t=e.target;show(t&&(t.src||t.href)?'não carregou '+(t.src||t.href):e.message)},true);
+addEventListener('unhandledrejection',function(e){show(String(e.reason&&e.reason.message||e.reason))})})();
+</script>
+<script>
+/* compatibilidade com navegadores antigos (Android com Chrome/WebView desatualizado) */
+(function(){
+ var E=Element.prototype,A=Array.prototype,S=String.prototype;
+ if(!E.replaceChildren)E.replaceChildren=function(){while(this.firstChild)this.removeChild(this.firstChild);for(var i=0;i<arguments.length;i++){var n=arguments[i];this.appendChild(typeof n==='string'?document.createTextNode(n):n)}};
+ if(!S.replaceAll)S.replaceAll=function(a,b){return typeof a==='string'?this.split(a).join(b):this.replace(a,b)};
+ if(!Object.fromEntries)Object.fromEntries=function(it){var o={};for(var e of it)o[e[0]]=e[1];return o};
+ if(!Promise.allSettled)Promise.allSettled=function(ps){return Promise.all(ps.map(function(p){return Promise.resolve(p).then(function(v){return{status:'fulfilled',value:v}},function(r){return{status:'rejected',reason:r}})}))};
+ if(!A.at)A.at=function(i){i=Math.trunc(i)||0;if(i<0)i+=this.length;return this[i]};
+ if(!A.flat)A.flat=function(){return A.concat.apply([],this)};
+ if(!(window.crypto&&crypto.randomUUID)&&window.crypto)crypto.randomUUID=function(){return'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=crypto.getRandomValues(new Uint8Array(1))[0]&15;return(c==='x'?r:(r&3|8)).toString(16)})};
+ if(!window.fetch||!window.Promise||!window.MutationObserver||!window.IntersectionObserver){
+  document.addEventListener('DOMContentLoaded',function(){document.body.innerHTML='<div style="font-family:sans-serif;padding:32px;text-align:center;color:#444"><h2 style="color:#7a1633">OtaWeb</h2><p>Seu navegador é muito antigo para abrir a rede.</p><p>Atualize o Chrome (ou o Android System WebView) na Play Store e tente de novo.</p></div>'});
+ }
+})();
+</script>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+tailwind.config={theme:{extend:{colors:Object.fromEntries(['bg','card','soft','line','ink','mut','brand'].map(k=>[k,`rgb(var(--${k}) / <alpha-value>)`]))}}}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+:root{color-scheme:light;--bg:240 242 245;--card:255 255 255;--soft:233 235 238;--line:222 224 228;--ink:28 30 33;--mut:101 103 107;--brand:122 22 51}
+.dark{color-scheme:dark;--bg:18 10 13;--card:30 20 25;--soft:46 32 39;--line:54 38 46;--ink:238 230 233;--mut:166 148 155;--brand:214 72 112}
+html,body{height:100%}
+body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:rgb(var(--bg));color:rgb(var(--ink));-webkit-font-smoothing:antialiased}
+.card{background:rgb(var(--card));border:1px solid rgb(var(--line));border-radius:.75rem}
+.dark .card{box-shadow:none}:root:not(.dark) .card{box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.inp{width:100%;background:rgb(var(--soft));border:1px solid transparent;border-radius:.6rem;padding:.65rem .85rem;font-size:.9rem;outline:0;color:rgb(var(--ink));transition:.15s}
+.inp::placeholder{color:rgb(var(--mut))}.inp:focus{border-color:rgb(var(--brand));background:rgb(var(--card))}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;background:rgb(var(--brand));color:#fff;font-weight:600;font-size:.85rem;border-radius:.6rem;padding:.6rem 1.1rem;transition:.15s}
+.btn:hover{filter:brightness(1.12)}.btn:active{transform:scale(.97)}.btn:disabled{opacity:.5}
+.btn2{display:inline-flex;align-items:center;justify-content:center;gap:.45rem;background:rgb(var(--soft));color:rgb(var(--ink));font-size:.82rem;font-weight:600;border-radius:.6rem;padding:.55rem 1rem;border:1px solid transparent;transition:.15s}
+.btn2:hover{filter:brightness(.95)}.btn2.sel{border-color:rgb(var(--brand));color:rgb(var(--brand))}
+.circ{position:relative;display:grid;place-items:center;width:2.5rem;height:2.5rem;border-radius:9999px;background:rgb(var(--soft));color:rgb(var(--ink));transition:.15s}.circ:hover{filter:brightness(.93)}
+.ic{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .6rem;border-radius:.6rem;font-size:.85rem;color:rgb(var(--mut));transition:.15s}.ic:hover{background:rgb(var(--soft))}
+.act{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;gap:.45rem;padding:.55rem;border-radius:.5rem;font-size:.85rem;font-weight:600;color:rgb(var(--mut));transition:.15s}.act:hover{background:rgb(var(--soft))}
+.bn{display:flex;flex-direction:column;align-items:center;gap:.1rem;padding:.5rem 0 .4rem;font-size:.62rem;font-weight:600;color:rgb(var(--mut));border-top:2px solid transparent}
+.bn.tab-on{color:rgb(var(--brand));border-top-color:rgb(var(--brand))}
+.tn{display:grid;place-items:center;width:5.2rem;height:3.5rem;color:rgb(var(--mut));border-bottom:3px solid transparent;transition:.15s}.tn:hover{background:rgb(var(--soft))}.tn.tab-on{color:rgb(var(--brand));border-bottom-color:rgb(var(--brand))}
+.badge{position:absolute;top:-6px;right:-9px;min-width:1.05rem;height:1.05rem;padding:0 .25rem;border-radius:9999px;background:#d92d4f;color:#fff;font-size:.62rem;font-weight:700;display:grid;place-items:center}
+.ring{padding:3px;border-radius:9999px;background:rgb(var(--brand))}
+.rpick{position:absolute;bottom:calc(100% - 6px);left:0;display:none;gap:.3rem;padding:.4rem .55rem;background:rgb(var(--card));border:1px solid rgb(var(--line));border-radius:9999px;box-shadow:0 8px 28px rgba(0,0,0,.28);z-index:20}
+.rwrap.open .rpick{display:flex}@media (hover:hover){.rwrap:hover .rpick{display:flex}}.rpick button{transition:transform .15s}.rpick button:hover{transform:scale(1.4) translateY(-5px)}
+.pop{animation:pop .22s ease-out}@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}}
+.slide{animation:sl .3s ease-out}@keyframes sl{from{opacity:0;transform:translateY(10px)}}
+.hb svg{animation:hb .35s}@keyframes hb{50%{transform:scale(1.35)}}
+.sk{background:linear-gradient(90deg,rgb(var(--soft)),rgb(var(--line)),rgb(var(--soft)));background-size:200% 100%;animation:sk 1.4s infinite;border-radius:.75rem}@keyframes sk{to{background-position:-200% 0}}
+.flash{animation:fl 1.3s}@keyframes fl{0%,65%{background:rgb(var(--brand)/.22)}}
+::-webkit-scrollbar{width:7px}::-webkit-scrollbar-thumb{background:rgb(var(--line));border-radius:4px}
+</style></head>
+<body>
+
+<div id="auth" class="hidden fixed inset-0 z-50 overflow-auto bg-bg">
+ <div id="auth-lang" class="absolute top-3 right-3 z-10 flex gap-1"></div>
+ <div class="min-h-full flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-20 p-6">
+  <div class="max-w-md text-center lg:text-left space-y-3">
+   <div class="text-5xl font-extrabold text-brand tracking-tight">OtaWeb</div>
+   <p class="text-lg text-ink/80 leading-snug">Conecte-se com outros otakus: poste, converse e compartilhe o que você ama.</p>
+  </div>
+  <div class="card p-6 w-full max-w-sm space-y-3 pop">
+   <div class="grid grid-cols-2 gap-1 p-1 rounded-lg bg-soft"><button id="t-in" class="btn2" onclick="authMode('in')">Entrar</button><button id="t-up" class="btn2" onclick="authMode('up')">Criar conta</button></div>
+   <div id="up-f" class="space-y-3 hidden"><input id="a-name" class="inp" placeholder="Nome de exibição" maxlength="30"><input id="a-handle" class="inp" placeholder="@usuario (a-z, 0-9, _)" maxlength="20"></div>
+   <input id="a-email" type="email" class="inp" placeholder="E-mail" autocomplete="email">
+   <input id="a-pass" type="password" class="inp" placeholder="Senha (mín. 6 caracteres)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuth()">
+   <button id="a-forgot" class="text-xs text-brand text-left font-semibold" onclick="forgot()">Esqueci minha senha</button>
+   <div id="a-err" class="text-xs text-brand min-h-4"></div>
+   <button id="a-go" class="btn w-full !py-3" onclick="doAuth()">Entrar</button>
+  </div>
+ </div>
+</div>
+
+<div id="app" class="h-full flex flex-col">
+ <header class="shrink-0 bg-card border-b border-line" style="padding-top:env(safe-area-inset-top,0px)">
+  <div class="h-14 flex items-center gap-2 px-3 md:px-5">
+   <div class="text-[1.65rem] font-extrabold text-brand tracking-tight cursor-pointer leading-none md:w-48" onclick="go('feed')">OtaWeb</div>
+   <nav id="nav-top" class="hidden md:flex flex-1 justify-center"></nav>
+   <div class="flex-1 md:hidden"></div>
+   <button class="circ" onclick="toggleSearch()" data-i="search" data-s="19" aria-label="Buscar"></button>
+   <button class="circ" onclick="go('msgs')" data-i="msgc" data-s="19" aria-label="Mensagens"><b id="msg-dot" class="badge hidden"></b></button>
+  </div>
+  <div id="sbar" class="hidden px-3 md:px-5 pb-2"><input id="q" class="inp max-w-xl mx-auto block" placeholder="Buscar pessoas e publicações" oninput="debSearch(this.value)"></div>
+ </header>
+
+ <main id="main" class="flex-1 overflow-y-auto">
+  <section id="v-feed" class="max-w-xl mx-auto p-3 md:py-5 space-y-3">
+   <div id="stbar" class="flex gap-3 overflow-x-auto pb-1"></div>
+   <div class="card p-3 space-y-3">
+    <div class="flex items-center gap-3"><div id="me-av" class="shrink-0 cursor-pointer" onclick="showProfile(P.id)"></div>
+     <button class="flex-1 text-left inp !rounded-full text-mut" onclick="openCreate('text')">No que você está pensando?</button></div>
+    <div class="grid grid-cols-3 gap-1 border-t border-line pt-2">
+     <button class="act" onclick="openCreate('photo')"><span class="text-brand" data-i="image" data-s="20"></span>Foto</button>
+     <button class="act" onclick="openCreate('video')"><span class="text-brand" data-i="video" data-s="20"></span>Vídeo</button>
+     <button class="act" onclick="openCreate('poll')"><span class="text-brand" data-i="chart" data-s="20"></span>Enquete</button>
+    </div>
+   </div>
+   <div id="posts" class="space-y-3 pb-6"><div class="sk h-44"></div><div class="sk h-64"></div></div>
+  </section>
+  <section id="v-reels" class="hidden h-full"></section>
+  <section id="v-groups" class="hidden"></section>
+  <section id="v-notif" class="hidden"></section>
+  <section id="v-menu" class="hidden"></section>
+  <section id="v-msgs" class="hidden h-full"></section>
+  <section id="v-other" class="hidden max-w-xl mx-auto p-3 md:py-5 space-y-3 pb-8"></section>
+ </main>
+
+ <nav id="nav-bot" class="md:hidden shrink-0 grid grid-cols-6 items-center bg-card border-t border-line" style="padding-bottom:env(safe-area-inset-bottom,0px)"></nav>
+</div>
+
+<div id="sheet" class="hidden fixed inset-0 z-50 bg-black/60 flex items-end md:items-center justify-center" onclick="if(event.target===this)closeSheet()"></div>
+<div id="modal" class="hidden fixed inset-0 z-50 bg-black/60 grid place-items-center p-4 overflow-auto" onclick="if(event.target===this)closeM()"></div>
+<div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[60] card px-4 py-2.5 text-sm pop shadow-lg"></div>
+
+<script src="config.js?v=17"></script>
+<script src="i18n.js?v=17"></script>
+<script src="icons.js?v=17"></script>
+<script src="app.js?v=17"></script>
+<script src="chat.js?v=17"></script>
+<script src="chat2.js?v=17"></script>
+<script src="social.js?v=17"></script>
+<script src="extras.js?v=17"></script>
+<script src="stories.js?v=17"></script>
+<script src="guilds.js?v=17"></script>
+<script src="support.js?v=17"></script>
+<script src="gate.js?v=17"></script>
+<script src="admin.js?v=17"></script>
+</body></html>

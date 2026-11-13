@@ -1,0 +1,7 @@
+{
+  "appId": "app.otaweb.rede",
+  "appName": "OtaWeb",
+  "webDir": "www",
+  "backgroundColor": "#7a1633",
+  "server": { "androidScheme": "https" }
+}
