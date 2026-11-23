@@ -5,7 +5,8 @@
   "description": "App Android do OtaWeb (gerado com Capacitor)",
   "dependencies": {
     "@capacitor/android": "^6.1.2",
-    "@capacitor/core": "^6.1.2"
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/push-notifications": "^6.0.3"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.1.2"

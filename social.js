@@ -1,8 +1,8 @@
 /* OtaWeb · social: comentários (respostas e reações), lista de reações, edição, presença */
 const SH = { post: null, rows: [], reply: null, open: false };
 const goProfile = id => { closeSheet(); closeM(); showProfile(id) };
-function sheet(h) { const s = $('#sheet'); s.innerHTML = h; s.classList.remove('hidden'); SH.open = true }
-function closeSheet() { $('#sheet').classList.add('hidden'); SH.open = false; SH.post = null }
+function sheet(h) { const s = $('#sheet'); s.innerHTML = h; s.classList.remove('hidden'); SH.open = true; if (typeof layerOpen === 'function') layerOpen('sheet', () => { $('#sheet').classList.add('hidden'); SH.open = false; SH.post = null }) }
+function closeSheet() { $('#sheet').classList.add('hidden'); SH.open = false; SH.post = null; if (typeof layerClosed === 'function') layerClosed('sheet') }
 const askText = (t, v) => new Promise(r => {
   modal(`<h3 class="font-bold mb-3">${t}</h3><textarea id="atx" rows="4" class="inp !text-base" maxlength="2000">${E(v)}</textarea><div class="flex gap-2 justify-end mt-3"><button class="btn2" id="ac">Cancelar</button><button class="btn" id="ok">Salvar</button></div>`);
   const x = $('#atx'); x.focus(); x.setSelectionRange(x.value.length, x.value.length);

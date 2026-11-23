@@ -7,11 +7,11 @@ try { if (!sessionStorage.getItem('ow-v')) { sessionStorage.setItem('ow-v', '1')
 function openAdmin(tab) {
   if (!P || !P.is_admin) return T('Acesso restrito aos administradores.');
   AD.tab = tab || AD.tab; go('other'); window.lastProfile = null; window.reloadOther = () => {}; $('#q').value = '';
-  const tabs = [['resumo', 'Resumo'], ['denuncias', 'Denúncias'], ['pedidos', 'Revisões'], ['suporte', 'Suporte'], ['usuarios', 'Usuários'], ['registro', 'Registro']];
+  const tabs = [['resumo', 'Resumo'], ['denuncias', 'Denúncias'], ['pedidos', 'Revisões'], ['suporte', 'Suporte'], ['avisos', 'Avisos'], ['usuarios', 'Usuários'], ['registro', 'Registro']];
   $('#v-other').innerHTML = backBtn('menu') + `<h2 class="font-bold text-xl px-1">Administração</h2>
   <div class="flex gap-2 overflow-x-auto pb-1">${tabs.map(([k, l]) => `<button class="btn2 !py-1.5 !px-3 whitespace-nowrap ${AD.tab === k ? 'sel' : ''}" onclick="openAdmin('${k}')">${l}</button>`).join('')}</div>
   <div id="ad-body" class="space-y-3"><div class="sk h-24"></div><div class="sk h-40"></div></div>`;
-  ({ resumo: adResumo, denuncias: adDenuncias, pedidos: adPedidos, suporte: adSuporte, usuarios: adUsuarios, registro: adRegistro })[AD.tab]();
+  ({ resumo: adResumo, denuncias: adDenuncias, pedidos: adPedidos, suporte: adSuporte, avisos: adAvisos, usuarios: adUsuarios, registro: adRegistro })[AD.tab]();
 }
 const adErr = e => errH(/does not exist|Could not find|schema cache/i.test(e.message || '') ? 'Falta rodar a migração 8 (ou a 7) no Supabase.' : e);
 const fmtB = b => b >= 1e9 ? (b / 1e9).toFixed(2) + ' GB' : (b / 1e6).toFixed(1) + ' MB';
@@ -140,7 +140,7 @@ function adUserMenu(id, pen, isAdm) {
 async function adRegistro() {
   const el = $('#ad-body'); if (!el) return; const { data, error } = await sb.rpc('admin_log_list'); if (!$('#ad-body')) return;
   if (error) { el.innerHTML = adErr(error); return }
-  const nm = { delete_post: 'apagou uma publicação', delete_story: 'apagou um story', delete_guild: 'excluiu uma guilda', ban: 'suspendeu uma conta', unban: 'reativou uma conta', apply_ban: 'bloqueou uma conta para sempre', support_reply: 'respondeu a um pedido de suporte', support_close: 'fechou um pedido de suporte', apply_account: 'suspendeu uma conta', apply_messages: 'impediu alguém de enviar mensagens', apply_posts: 'impediu alguém de publicar', apply_comments: 'impediu alguém de comentar', lift: 'levantou penalidades', appeal_accepted: 'aceitou um pedido de revisão', appeal_denied: 'negou um pedido de revisão', make_admin: 'tornou alguém administrador', remove_admin: 'removeu um administrador', report_dismissed: 'descartou uma denúncia', report_resolved: 'resolveu uma denúncia', report_open: 'reabriu uma denúncia' };
+  const nm = { delete_post: 'apagou uma publicação', delete_story: 'apagou um story', delete_guild: 'excluiu uma guilda', broadcast: 'enviou um aviso para todos', ban: 'suspendeu uma conta', unban: 'reativou uma conta', apply_ban: 'bloqueou uma conta para sempre', support_reply: 'respondeu a um pedido de suporte', support_close: 'fechou um pedido de suporte', apply_account: 'suspendeu uma conta', apply_messages: 'impediu alguém de enviar mensagens', apply_posts: 'impediu alguém de publicar', apply_comments: 'impediu alguém de comentar', lift: 'levantou penalidades', appeal_accepted: 'aceitou um pedido de revisão', appeal_denied: 'negou um pedido de revisão', make_admin: 'tornou alguém administrador', remove_admin: 'removeu um administrador', report_dismissed: 'descartou uma denúncia', report_resolved: 'resolveu uma denúncia', report_open: 'reabriu uma denúncia' };
   el.innerHTML = `<div class="card divide-y divide-line overflow-hidden">${(data || []).map(l => `<div class="p-3"><div class="text-sm"><b>${E(l.admin)}</b> ${nm[l.action] || E(l.action)}</div>${l.details && l.details.body ? `<div class="text-xs text-mut truncate">“${E(l.details.body)}”</div>` : ''}${l.details && l.details.reason ? `<div class="text-xs text-mut">Motivo: ${E(l.details.reason)}${l.details.hours ? ' · ' + l.details.hours + ' h' : ''}</div>` : ''}<div class="text-[11px] text-mut">${ago(l.created_at)}</div></div>`).join('') || '<p class="p-8 text-center text-sm text-mut">Nenhuma ação registrada ainda.</p>'}</div>`;
 }
 
@@ -186,4 +186,22 @@ function adRepGuild(r) {
   <div class="text-sm font-semibold">${E(g.name)} <span class="text-xs font-normal text-mut">· ${g.members} membros</span></div>${g.description ? `<p class="text-sm text-mut whitespace-pre-wrap break-words">${E(g.description)}</p>` : ''}
   <div class="text-[11px] text-mut">Denunciada por ${E(who.name || '?')} (@${E(who.handle || '?')})${r.note ? ' · ' + E(r.note) : ''}</div>
   <div class="flex flex-wrap gap-2 pt-1">${open ? `<button class="btn2 !py-1.5 !px-3 text-xs" onclick="openGuild('${g.id}')">Ver guilda</button><button class="btn !py-1.5 !px-3 text-xs" onclick="adDelGuild('${g.id}','${r.id}')">Excluir guilda</button><button class="btn2 !py-1.5 !px-3 text-xs !text-brand" onclick="adPenalty('${g.owner_id}','${r.id}')">Penalizar líder</button><button class="btn2 !py-1.5 !px-3 text-xs" onclick="adSetRep('${r.id}','dismissed')">Descartar</button><button class="btn2 !py-1.5 !px-3 text-xs" onclick="adSetRep('${r.id}','resolved')">Resolvida</button>` : `<button class="btn2 !py-1.5 !px-3 text-xs" onclick="adSetRep('${r.id}','open')">Reabrir</button>`}</div></div>`;
+}
+
+/* ---------- avisos manuais para todos ---------- */
+async function adAvisos() {
+  const el = $('#ad-body'); if (!el) return;
+  el.innerHTML = `<div class="card p-4 space-y-3"><div class="text-sm font-semibold">Enviar aviso</div>
+   <p class="text-xs text-mut">O aviso aparece nas Notificações de todos os usuários e chega como notificação no celular de quem tem o app com as notificações ativadas. Use para avisar de atualizações, manutenção ou novidades.</p>
+   <input id="av-t" class="inp" maxlength="60" placeholder="Título (ex.: Nova atualização do app)"><textarea id="av-m" rows="4" class="inp" maxlength="240" placeholder="Mensagem"></textarea>
+   <div class="flex gap-2"><button class="btn2 flex-1" onclick="adSendAviso(true)">Enviar teste só para mim</button><button class="btn flex-1" onclick="adSendAviso(false)">Enviar para todos</button></div></div>`;
+}
+async function adSendAviso(me) {
+  const t = $('#av-t').value.trim(), m = $('#av-m').value.trim(); if (t.length < 2 || m.length < 2) return T('Escreva o título e a mensagem.');
+  const go = async () => {
+    const { data, error } = await sb.rpc('admin_broadcast', { p_title: t, p_body: m, p_me: me });
+    if (error) return T(/admin_broadcast|does not exist/.test(error.message) ? 'Falta rodar a migração 14 no Supabase.' : 'Erro: ' + error.message);
+    T('Aviso enviado para ' + data + ' pessoa(s).'); if (!me) { $('#av-t').value = ''; $('#av-m').value = '' }
+  };
+  me ? go() : confirmBox('Enviar para todos?', 'Todos os usuários vão receber este aviso. Não dá para desfazer.', 'Enviar', go);
 }

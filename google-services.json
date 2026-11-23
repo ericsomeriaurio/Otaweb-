@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "358758250664",
+    "project_id": "otaweb-621cf",
+    "storage_bucket": "otaweb-621cf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:358758250664:android:ca2234e4c1ec067dfdaa9d",
+        "android_client_info": {
+          "package_name": "app.otaweb.rede"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDD5SLX53c1PL1K_tZwsm4KBpeuLOZUyQo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -7,8 +7,8 @@ const T = t => { const x = $('#toast'); x.textContent = String(t).replace(/[\u{1
 const ago = d => { const m = (Date.now() - new Date(d)) / 6e4; return m < 1 ? 'agora' : m < 60 ? Math.floor(m) + ' min' : m < 1440 ? Math.floor(m / 60) + ' h' : Math.floor(m / 1440) + ' d' };
 const av = (u, s = 40) => u && u.avatar_url ? `<img src="${E(u.avatar_url)}" style="width:${s}px;height:${s}px" class="rounded-full object-cover shrink-0">` :
   `<div style="width:${s}px;height:${s}px" class="rounded-full bg-brand grid place-items-center font-bold text-white shrink-0">${E((u?.name || '?')[0])}</div>`;
-function modal(h) { const m = $('#modal'); m.innerHTML = `<div class="card p-5 w-full max-w-md pop">${h}</div>`; m.classList.remove('hidden') }
-const closeM = () => $('#modal').classList.add('hidden');
+function modal(h) { const m = $('#modal'); m.innerHTML = `<div class="card p-5 w-full max-w-md pop">${h}</div>`; m.classList.remove('hidden'); if (typeof layerOpen === 'function') layerOpen('modal', () => m.classList.add('hidden')) }
+function closeM() { $('#modal').classList.add('hidden'); if (typeof layerClosed === 'function') layerClosed('modal') }
 const ask = (t, ls) => new Promise(r => {
   modal(`<h3 class="font-bold mb-3">${t}</h3>` + ls.map((l, i) => `<input id="ak${i}" placeholder="${l}" class="inp mb-2">`).join('') + `<div class="flex gap-2 justify-end mt-2"><button class="btn2" id="ac">Cancelar</button><button class="btn" id="ok">OK</button></div>`);
   $('#ac').onclick = () => { closeM(); r(null) }; $('#ok').onclick = () => { const v = ls.map((_, i) => $('#ak' + i).value.trim()); closeM(); r(v) };
@@ -59,7 +59,7 @@ async function startSession(ses) {
     const { data, error } = await sb.from('profiles').select('*').eq('id', ses.user.id).single();
     if (error || !data) { T('Não consegui carregar seu perfil: ' + (error ? error.message : 'perfil não encontrado')); return }
     if (typeof gateCheck === 'function' && await gateCheck(data)) return;
-    P = data; $('#auth').classList.add('hidden'); go('feed'); if (typeof restrBanner === 'function') restrBanner(); live(); loadBadge(); if (typeof chatLive === 'function') chatLive(); if (typeof socialStart === 'function') socialStart(); if (typeof storiesStart === 'function') storiesStart();
+    P = data; $('#auth').classList.add('hidden'); go('feed'); if (typeof restrBanner === 'function') restrBanner(); live(); loadBadge(); if (typeof chatLive === 'function') chatLive(); if (typeof socialStart === 'function') socialStart(); if (typeof storiesStart === 'function') storiesStart(); if (typeof pushStart === 'function') pushStart();
     if (location.hash.startsWith('#u-')) openHandle(location.hash.slice(3)); else if (location.hash.startsWith('#g-') && typeof openGuild === 'function') openGuild(location.hash.slice(3));
   } finally { startSession.busy = false }
 }

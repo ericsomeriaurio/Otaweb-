@@ -32,4 +32,5 @@ if __name__ == '__main__':
         save(mark(round(48 * k)), os.path.join(base, 'ic_launcher.png'))
         save(mark(round(48 * k), round_shape=True), os.path.join(base, 'ic_launcher_round.png'))
         save(mark(round(108 * k), bg=False, scale=.66), os.path.join(base, 'ic_launcher_foreground.png'))   # ícone adaptivo (fundo vem da cor)
+        save(mark(round(24 * k), bg=False, scale=1.25), os.path.join(res, 'drawable-' + name, 'ic_stat_otaweb.png'))   # ícone pequeno das notificações (branco, sem fundo)
     print('ícones gerados em', res)

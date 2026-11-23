@@ -90,11 +90,11 @@ function viewStories(id, start) {
   ST.gi = gi; const g = ST.groups[gi]; ST.si = start != null ? start : id === P.id ? 0 : Math.max(0, g.items.findIndex(i => !ST.seen.has(i.id)));
   const old = document.getElementById('sv'); if (old) old.remove();
   const v = document.createElement('div'); v.id = 'sv'; v.className = 'fixed inset-0 z-[75] bg-black'; v.innerHTML = '<div id="sv-stage" class="relative w-full h-full max-w-md mx-auto overflow-hidden"></div>';
-  document.body.appendChild(v); document.body.style.overflow = 'hidden'; addEventListener('keydown', stKey); ST.sheet = false; ST.paused = false; stShow();
+  document.body.appendChild(v); document.body.style.overflow = 'hidden'; addEventListener('keydown', stKey); ST.sheet = false; ST.paused = false; stShow(); if (typeof layerOpen === 'function') layerOpen('story', () => stClose(true));
 }
 const stKey = e => { if (e.key === 'Escape') stClose(); else if (e.key === 'ArrowRight') stNext(); else if (e.key === 'ArrowLeft') stPrev() };
-function stClose() {
-  clearInterval(ST.iv); const v = document.getElementById('sv'); if (v) v.remove(); document.body.style.overflow = ''; removeEventListener('keydown', stKey); ST.cur = null; ST.sheet = false; loadStories();
+function stClose(fromBack) {
+  clearInterval(ST.iv); const v = document.getElementById('sv'); if (v) v.remove(); document.body.style.overflow = ''; removeEventListener('keydown', stKey); ST.cur = null; ST.sheet = false; loadStories(); if (fromBack !== true && typeof layerClosed === 'function') layerClosed('story');
 }
 function stShow() {
   const g = ST.groups[ST.gi], it = g && g.items[ST.si], st = document.getElementById('sv-stage'); if (!it || !st) return stClose();

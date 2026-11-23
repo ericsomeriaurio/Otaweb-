@@ -1,9 +1,9 @@
 /* OtaWeb · extras: conta, menções, notificações, salvos e definições */
-const backBtn = to => `<button class="btn2 mb-1" onclick="go('${to}')">${ic('back', false, 16)} Voltar</button>`;
+const backBtn = to => `<button class="btn2 mb-1" onclick="navBack('${to}')">${ic('back', false, 16)} Voltar</button>`;
 const SV = { cat: 'Todos', rows: [] };
 
 /* ---------- sair e recuperar conta ---------- */
-async function doLogout() { await sb.auth.signOut(); location.reload() }
+async function doLogout() { if (typeof pushStop === 'function') await pushStop(); await sb.auth.signOut(); location.reload() }
 function forgot() {
   modal(`<h3 class="font-bold text-lg mb-1">Recuperar conta</h3><p class="text-sm text-mut mb-3">Enviamos um link para você criar uma nova senha.</p>
   <input id="fg-e" type="email" class="inp mb-3" placeholder="Seu e-mail" value="${E($('#a-email').value.trim())}"><div class="flex gap-2 justify-end"><button class="btn2" onclick="closeM()">Cancelar</button><button class="btn" onclick="sendReset()">Enviar link</button></div>`);
@@ -50,11 +50,11 @@ function mnPick(h) {
 
 /* ---------- notificações que abrem o post ---------- */
 async function loadNotifs() {
-  const { data, error } = await sb.from('notifications').select('id,type,read,ref_id,created_at,actor:profiles!actor(id,name,handle,avatar_url)').eq('user_id', P.id).order('created_at', { ascending: false }).limit(50);
+  const { data, error } = await sb.from('notifications').select('id,type,read,ref_id,created_at,title,body,data,actor:profiles!actor(id,name,handle,avatar_url)').eq('user_id', P.id).order('created_at', { ascending: false }).limit(50);
   if (error) { $('#v-notif').innerHTML = errH(error); return }
   const tx = { like: 'reagiu à sua publicação', comment: 'comentou na sua publicação', reply: 'respondeu ao seu comentário', follow: 'começou a seguir você', mention: 'mencionou você', mention_all: 'mencionou todos os seguidores', story_react: 'reagiu ao seu story', support_reply: 'respondeu ao seu pedido de suporte', guild_request: 'pediu para entrar na sua guilda', guild_approved: 'aprovou seu pedido para entrar na guilda', guild_invite: 'convidou você para uma guilda', guild_invite_accepted: 'aceitou seu convite para a guilda' }, ico = { like: 'heart', comment: 'msgc', reply: 'msgc', follow: 'user', mention: 'at', mention_all: 'at', story_react: 'heart', support_reply: 'msgc', guild_request: 'users', guild_approved: 'users', guild_invite: 'users', guild_invite_accepted: 'users' };
   $('#v-notif').innerHTML = `<div class="max-w-xl mx-auto p-3 md:py-5"><h2 class="font-bold text-xl mb-3 px-1">Notificações</h2><div class="card divide-y divide-line overflow-hidden">` +
-    ((data || []).filter(n => n.actor).map(n => `<button class="w-full flex items-center gap-3 p-3 text-left hover:bg-soft transition ${n.read ? '' : 'bg-brand/10'}" onclick="openNotif('${n.type}','${n.ref_id || ''}','${n.actor.id}')"><span class="relative shrink-0">${av(n.actor, 46)}<span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-brand text-white grid place-items-center ring-2 ring-card">${ic(ico[n.type] || 'bell', n.type === 'like', 11)}</span></span><div class="text-sm flex-1 min-w-0"><b>${E(n.actor.name)}</b> ${tx[n.type] || 'interagiu com você'}<div class="text-xs text-mut mt-0.5">${ago(n.created_at)}</div></div></button>`).join('') || '<p class="p-10 text-center text-sm text-mut">Nenhuma notificação por enquanto.</p>') + '</div></div>';
+    ((data || []).filter(n => n.actor || SYS_TYPES.includes(n.type)).map(n => !n.actor ? sysRow(n) : `<button class="w-full flex items-center gap-3 p-3 text-left hover:bg-soft transition ${n.read ? '' : 'bg-brand/10'}" onclick="openNotif('${n.type}','${n.ref_id || ''}','${n.actor.id}')"><span class="relative shrink-0">${av(n.actor, 46)}<span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-brand text-white grid place-items-center ring-2 ring-card">${ic(ico[n.type] || 'bell', n.type === 'like', 11)}</span></span><div class="text-sm flex-1 min-w-0"><b>${E(n.actor.name)}</b> ${tx[n.type] || 'interagiu com você'}<div class="text-xs text-mut mt-0.5">${ago(n.created_at)}</div></div></button>`).join('') || '<p class="p-10 text-center text-sm text-mut">Nenhuma notificação por enquanto.</p>') + '</div></div>';
   if ((data || []).some(n => !n.read)) { await sb.from('notifications').update({ read: true }).eq('user_id', P.id).eq('read', false); loadBadge() }
 }
 function openNotif(type, ref, actor) { if (type === 'guild_request' || type === 'guild_approved' || type === 'guild_invite' || type === 'guild_invite_accepted') return openGuild(ref); if (type === 'support_reply') return openSupport(ref); if (type === 'story_react') return openOwnStories(ref); if (type === 'follow' || !ref) return showProfile(actor); showPost(ref, type === 'comment' || type === 'reply') }
@@ -116,8 +116,10 @@ async function openSettings() {
    <div class="text-xs text-mut">Seu @usuário (@${E(P.handle)}) não pode ser alterado.</div><button class="btn" onclick="setProfile()">Salvar perfil</button></div>
   <div class="card p-4 space-y-3"><div class="text-sm font-semibold">E-mail</div><div class="text-xs text-mut">Atual: ${E(user.email)}</div><input id="s-mail" type="email" class="inp" placeholder="Novo e-mail"><button class="btn2" onclick="setEmail()">Alterar e-mail</button></div>
   <div class="card p-4 space-y-3"><div class="text-sm font-semibold">Senha</div><input id="s-p1" type="password" class="inp" placeholder="Nova senha (mín. 6)" autocomplete="new-password"><input id="s-p2" type="password" class="inp" placeholder="Repita a nova senha" autocomplete="new-password"><button class="btn2" onclick="setPass()">Alterar senha</button></div>
+  <div id="push-card" class="card p-4"></div>
   <div class="card p-4 flex items-center gap-3"><div class="flex-1"><div class="text-sm font-semibold">Mostrar quando estou online</div><div class="text-xs text-mut">Se desligar, os outros não veem quando você está online nem quando saiu.</div></div><button id="s-st" class="btn2 ${off ? '' : 'sel'}" onclick="setStatus()">${off ? 'Desligado' : 'Ligado'}</button></div>
   <div class="card p-4 space-y-3 !border-brand/40"><div class="text-sm font-semibold text-brand">Excluir conta</div><p class="text-xs text-mut">Apaga seu perfil, posts, comentários e mensagens. Não dá para desfazer.</p><button class="btn2 !text-brand" onclick="askDelete()">Excluir minha conta</button></div>`;
+  if (typeof pushPaintCard === 'function') pushPaintCard();
 }
 async function setProfile() {
   const u = { name: $('#s-name').value.trim(), bio: $('#s-bio').value.trim(), fav_anime: $('#s-fav').value.trim() }; if (u.name.length < 2) return T('Escolha um nome.');
@@ -141,3 +143,16 @@ async function doDelete() {
   const { error } = await sb.rpc('delete_my_account'); if (error) return T(/delete_my_account/.test(error.message) ? 'Falta rodar a migração 4 no Supabase.' : 'Não excluiu: ' + error.message);
   await sb.auth.signOut(); location.reload();
 }
+
+/* ---------- avisos do sistema nas notificações (boas-vindas, penalidades, avisos da equipe) ---------- */
+const SYS_TYPES = ['welcome', 'penalty', 'penalty_lifted', 'appeal_result', 'announcement'];
+const appMark = s => `<span class="shrink-0 rounded-full bg-brand text-white grid place-items-center" style="width:${s}px;height:${s}px"><svg width="${Math.round(s * .6)}" height="${Math.round(s * .6)}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><circle cx="12" cy="12" r="8"/><circle cx="9" cy="9" r="1.6" fill="currentColor" stroke="none"/></svg></span>`;
+function ntText(n) {
+  const d = n.data || {};
+  if (n.type === 'welcome') return ['Bem-vindo ao OtaWeb!', 'A rede social dos otakus. Faça amigos, entre em guildas e compartilhe o que você ama.', ''];
+  if (n.type === 'penalty') return d.scope === 'ban' ? ['Sua conta foi bloqueada', 'Ela foi bloqueada por violar os termos da rede.', ''] : d.scope === 'account' ? ['Sua conta foi suspensa', 'Toque para ver o motivo e pedir revisão.', 'openAccountState()'] : ['Você recebeu uma restrição', 'Toque para ver os detalhes.', 'openAccountState()'];
+  if (n.type === 'penalty_lifted') return ['Penalidade removida', 'Você já pode usar a conta normalmente.', ''];
+  if (n.type === 'appeal_result') return d.accepted ? ['Seu pedido de revisão foi aceito', d.response || 'A penalidade foi levantada.', ''] : ['Seu pedido de revisão foi negado', d.response || 'Veja os detalhes.', ''];
+  return [n.title || 'OtaWeb', n.body || '', ''];
+}
+const sysRow = n => { const [t, b, act] = ntText(n); return `<button class="w-full flex items-center gap-3 p-3 text-left hover:bg-soft transition ${n.read ? '' : 'bg-brand/10'}" ${act ? `onclick="${act}"` : ''}>${appMark(46)}<div class="text-sm flex-1 min-w-0"><b>${E(t)}</b><div class="text-mut">${E(b)}</div><div class="text-xs text-mut mt-0.5">${ago(n.created_at)}</div></div></button>` };
