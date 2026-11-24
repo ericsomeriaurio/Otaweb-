@@ -194,7 +194,8 @@ async function adAvisos() {
   el.innerHTML = `<div class="card p-4 space-y-3"><div class="text-sm font-semibold">Enviar aviso</div>
    <p class="text-xs text-mut">O aviso aparece nas Notificações de todos os usuários e chega como notificação no celular de quem tem o app com as notificações ativadas. Use para avisar de atualizações, manutenção ou novidades.</p>
    <input id="av-t" class="inp" maxlength="60" placeholder="Título (ex.: Nova atualização do app)"><textarea id="av-m" rows="4" class="inp" maxlength="240" placeholder="Mensagem"></textarea>
-   <div class="flex gap-2"><button class="btn2 flex-1" onclick="adSendAviso(true)">Enviar teste só para mim</button><button class="btn flex-1" onclick="adSendAviso(false)">Enviar para todos</button></div></div>`;
+   <div class="flex gap-2"><button class="btn2 flex-1" onclick="adSendAviso(true)">Enviar teste só para mim</button><button class="btn flex-1" onclick="adSendAviso(false)">Enviar para todos</button></div></div>
+   <div class="card p-4 space-y-2 mt-3"><div class="text-sm font-semibold">Verificar notificações</div><p class="text-xs text-mut">Mostra em qual etapa as notificações param.</p><button class="btn2" onclick="adPushDiag()">Verificar agora</button><pre id="ad-diag" class="text-xs text-mut whitespace-pre-wrap break-words"></pre></div>`;
 }
 async function adSendAviso(me) {
   const t = $('#av-t').value.trim(), m = $('#av-m').value.trim(); if (t.length < 2 || m.length < 2) return T('Escreva o título e a mensagem.');
@@ -204,4 +205,21 @@ async function adSendAviso(me) {
     T('Aviso enviado para ' + data + ' pessoa(s).'); if (!me) { $('#av-t').value = ''; $('#av-m').value = '' }
   };
   me ? go() : confirmBox('Enviar para todos?', 'Todos os usuários vão receber este aviso. Não dá para desfazer.', 'Enviar', go);
+}
+
+async function adPushDiag() {
+  const el = $('#ad-diag'); el.textContent = 'Verificando...';
+  const { data: d, error } = await sb.rpc('admin_push_diag');
+  if (error) { el.textContent = /admin_push_diag|does not exist/.test(error.message) ? 'Falta rodar a migração 15 no Supabase.' : 'Erro: ' + error.message; return }
+  const L = [];
+  L.push('Extensão pg_net (envia do banco para a função): ' + (d.pg_net ? 'ativa' : 'NÃO ATIVA'));
+  L.push('Endereço da função gravado: ' + (d.url_ok ? 'sim' : 'NÃO (falta o insert em app_config)'));
+  L.push('Senha gravada: ' + (d.secret_ok ? 'sim' : 'NÃO'));
+  L.push('Aparelhos registrados: ' + d.tokens + ' (da sua conta: ' + d.my_tokens + ')');
+  if (d.net_error) L.push('Não deu para ler as respostas: ' + d.net_error);
+  L.push('Últimas respostas da função:');
+  if (!(d.last || []).length) L.push('  nenhuma ainda');
+  (d.last || []).forEach(x => L.push('  ' + (x.status || 'sem resposta') + (x.error ? ' ' + x.error : '') + ' ' + (x.body || '')));
+  L.push('', 'Como ler: 200 = a função recebeu; 401 = desligue "Verify JWT" na função; 403 = senha diferente da gravada; 404 = nome ou endereço errado.');
+  el.textContent = L.join('\n');
 }
