@@ -74,7 +74,14 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          # a internet do GitHub às vezes demora: mais tempo para baixar o Gradle e até 3 tentativas
+          sed -i 's/^networkTimeout=.*/networkTimeout=180000/' gradle/wrapper/gradle-wrapper.properties || true
+          export GRADLE_OPTS="-Dorg.gradle.internal.http.socketTimeout=180000 -Dorg.gradle.internal.http.connectionTimeout=180000"
+          for i in 1 2 3; do
+            ./gradlew assembleDebug --no-daemon && exit 0
+            echo "Tentativa $i falhou. Esperando 20 segundos para tentar de novo..."; sleep 20
+          done
+          exit 1
 
       - name: Preparar o arquivo
         run: cp android/app/build/outputs/apk/debug/app-debug.apk OtaWeb.apk
@@ -89,7 +96,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "apk-${{ github.run_number }}" OtaWeb.apk \
-            --title "OtaWeb APK ${{ github.run_number }}" \
+          # o nome inclui a tentativa: rodar de novo (Re-run) não dá mais erro de "release já existe"
+          TAG="apk-${{ github.run_number }}-${{ github.run_attempt }}"
+          gh release create "$TAG" OtaWeb.apk \
+            --title "OtaWeb APK ${{ github.run_number }}.${{ github.run_attempt }}" \
             --notes "App Android do OtaWeb. Baixe o arquivo OtaWeb.apk e instale no celular."
             
