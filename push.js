@@ -52,7 +52,8 @@ async function pushOpen(d) {
   if (d.type === 'message' && d.chat) {
     await loadChats(); if (CH.list.find(c => c.id === d.chat)) { openChat(d.chat); go('msgs'); return }
   }
-  if (!d.type || ['welcome', 'penalty', 'penalty_lifted', 'appeal_result', 'announcement'].includes(d.type)) return go('notif');
+  if (!d.type) return go('notif');
+  if (['welcome', 'penalty', 'penalty_lifted', 'appeal_result', 'announcement'].includes(d.type)) { go('notif'); return ntOpenLatest(d.type) }
   openNotif(d.type, d.ref || '', d.actor || '');
 }
 

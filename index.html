@@ -1,5 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; connect-src 'self' https://tsueihvnnbvxjswigsmb.supabase.co wss://tsueihvnnbvxjswigsmb.supabase.co; object-src 'none'; base-uri 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#7a1633">
 <title>OtaWeb</title>
@@ -75,9 +77,11 @@ body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:
   </div>
   <div class="card p-6 w-full max-w-sm space-y-3 pop">
    <div class="grid grid-cols-2 gap-1 p-1 rounded-lg bg-soft"><button id="t-in" class="btn2" onclick="authMode('in')">Entrar</button><button id="t-up" class="btn2" onclick="authMode('up')">Criar conta</button></div>
-   <div id="up-f" class="space-y-3 hidden"><input id="a-name" class="inp" placeholder="Nome de exibição" maxlength="30"><input id="a-handle" class="inp" placeholder="@usuario (a-z, 0-9, _)" maxlength="20"></div>
-   <input id="a-email" type="email" class="inp" placeholder="E-mail" autocomplete="email">
-   <input id="a-pass" type="password" class="inp" placeholder="Senha (mín. 6 caracteres)" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuth()">
+   <div id="up-f" class="space-y-3 hidden"><input id="a-name" class="inp" placeholder="Nome de exibição" maxlength="30"><input id="a-handle" class="inp" placeholder="@usuario (a-z, 0-9, _)" maxlength="20" autocapitalize="off" autocomplete="username"></div>
+   <input id="a-email" type="text" inputmode="email" class="inp" placeholder="E-mail, @usuário ou número (+código)" autocomplete="username" autocapitalize="off" spellcheck="false">
+   <div id="up-f2" class="space-y-3 hidden"><input id="a-phone" type="tel" class="inp" placeholder="Número com código do país (opcional): +244 912 345 678" autocomplete="tel" maxlength="24"><div><div class="text-xs text-mut mb-1">Data de nascimento</div><input id="a-birth" type="date" class="inp" autocomplete="bday"></div></div>
+   <input id="a-pass" type="password" class="inp" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')doAuth()">
+   <div id="up-f3" class="hidden"><input id="a-pass2" type="password" class="inp" placeholder="Repetir a senha" autocomplete="new-password" onkeydown="if(event.key==='Enter')doAuth()"></div>
    <button id="a-forgot" class="text-xs text-brand text-left font-semibold" onclick="forgot()">Esqueci minha senha</button>
    <div id="a-err" class="text-xs text-brand min-h-4"></div>
    <button id="a-go" class="btn w-full !py-3" onclick="doAuth()">Entrar</button>
@@ -126,19 +130,19 @@ body{font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;background:
 <div id="modal" class="hidden fixed inset-0 z-50 bg-black/60 grid place-items-center p-4 overflow-auto" onclick="if(event.target===this)closeM()"></div>
 <div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-[60] card px-4 py-2.5 text-sm pop shadow-lg"></div>
 
-<script src="config.js?v=19"></script>
-<script src="i18n.js?v=19"></script>
-<script src="icons.js?v=19"></script>
-<script src="app.js?v=19"></script>
-<script src="chat.js?v=19"></script>
-<script src="chat2.js?v=19"></script>
-<script src="social.js?v=19"></script>
-<script src="extras.js?v=19"></script>
-<script src="stories.js?v=19"></script>
-<script src="guilds.js?v=19"></script>
-<script src="support.js?v=19"></script>
-<script src="gate.js?v=19"></script>
-<script src="admin.js?v=19"></script>
-<script src="push.js?v=19"></script>
-<script src="nav.js?v=19"></script>
+<script src="config.js?v=20"></script>
+<script src="i18n.js?v=20"></script>
+<script src="icons.js?v=20"></script>
+<script src="app.js?v=20"></script>
+<script src="chat.js?v=20"></script>
+<script src="chat2.js?v=20"></script>
+<script src="social.js?v=20"></script>
+<script src="extras.js?v=20"></script>
+<script src="stories.js?v=20"></script>
+<script src="guilds.js?v=20"></script>
+<script src="support.js?v=20"></script>
+<script src="gate.js?v=20"></script>
+<script src="admin.js?v=20"></script>
+<script src="push.js?v=20"></script>
+<script src="nav.js?v=20"></script>
 </body></html>

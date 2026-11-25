@@ -3,3 +3,5 @@ const SUPABASE_URL = 'https://tsueihvnnbvxjswigsmb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_PJpYEP16Ir3Dyi1lA-PS7w_TPmq8J1U';
 // Endereço público do site: usado nos links compartilhados e na recuperação de senha (também dentro do app Android)
 window.SITE_BASE = 'https://ericsomeriaurio.github.io/Otaweb-/';
+// Função do servidor (notificações e login por @usuário/número). Troque o nome se a sua função tiver outro nome.
+window.FN_URL = SUPABASE_URL + '/functions/v1/super-action';

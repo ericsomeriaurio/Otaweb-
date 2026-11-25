@@ -143,7 +143,7 @@ function addMemberModal() {
 }
 async function amSearch() {
   const c = CH.open, q = ($('#am-q').value || '').trim().replace(/[%,()]/g, ' ');
-  let r = sb.from('profiles').select('id,name,handle,avatar_url').limit(15); r = q ? r.or(`name.ilike.%${q}%,handle.ilike.%${q}%`) : r.order('created_at', { ascending: false });
+  let r = sb.from('profiles').select('id,name,handle,avatar_url').limit(15); r = q ? r.or(`name.ilike.%${safeQ(q)}%,handle.ilike.%${safeQ(q)}%`) : r.order('created_at', { ascending: false });
   const { data } = await r;
   $('#am-res').innerHTML = (data || []).map(u => `<div class="flex items-center gap-3 p-2">${av(u, 40)}<div class="flex-1 min-w-0"><div class="text-sm font-semibold truncate">${E(u.name)}</div><div class="text-xs text-mut">@${E(u.handle)}</div></div>${c.members.some(m => m.id === u.id) ? '<span class="text-xs text-mut">No grupo</span>' : `<button class="btn !py-1.5 !px-3" onclick="addOne('${u.id}',this)">Adicionar</button>`}</div>`).join('') || '<p class="text-xs text-mut text-center py-4">Ninguém encontrado.</p>';
 }

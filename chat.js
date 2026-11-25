@@ -164,7 +164,7 @@ function pickUsers(group, add) {
 }
 async function uSearch(group) {
   const q = ($('#uq').value || '').trim().replace(/[%,()]/g, ' ');
-  let r = sb.from('profiles').select('id,name,handle,avatar_url').neq('id', P.id).limit(12); r = q ? r.or(`name.ilike.%${q}%,handle.ilike.%${q}%`) : r.order('created_at', { ascending: false });
+  let r = sb.from('profiles').select('id,name,handle,avatar_url').neq('id', P.id).limit(12); r = q ? r.or(`name.ilike.%${safeQ(q)}%,handle.ilike.%${safeQ(q)}%`) : r.order('created_at', { ascending: false });
   const { data } = await r; (data || []).forEach(u => CH.users[u.id] = u);
   $('#ures').innerHTML = (data || []).map(u => `<button class="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-soft text-left" onclick="${group ? `togUser('${u.id}')` : `dmWith('${u.id}')`}">${av(u, 40)}<div class="flex-1"><div class="text-sm font-semibold">${E(u.name)}</div><div class="text-xs text-mut">@${E(u.handle)}</div></div>${CH.sel.includes(u.id) ? `<span class="text-brand">${ic('check', false, 18)}</span>` : ''}</button>`).join('') || '<p class="text-xs text-mut text-center py-4">Ninguém encontrado.</p>';
   $('#usel').innerHTML = CH.sel.map(id => `<span class="text-xs bg-soft rounded-full px-2.5 py-1">${E(CH.users[id].name)}</span>`).join('');

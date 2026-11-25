@@ -16,10 +16,10 @@ async function sendReset() {
 }
 function recoveryForm() {
   $('#auth').classList.add('hidden');
-  modal(`<h3 class="font-bold text-lg mb-3">Criar nova senha</h3><input id="rp1" type="password" class="inp mb-2" placeholder="Nova senha (mín. 6)" autocomplete="new-password"><input id="rp2" type="password" class="inp mb-3" placeholder="Repita a nova senha" autocomplete="new-password"><button class="btn w-full" onclick="saveNewPass()">Salvar nova senha</button>`);
+  modal(`<h3 class="font-bold text-lg mb-3">Criar nova senha</h3><input id="rp1" type="password" class="inp mb-2" placeholder="Nova senha (mín. 8)" autocomplete="new-password"><input id="rp2" type="password" class="inp mb-3" placeholder="Repita a nova senha" autocomplete="new-password"><button class="btn w-full" onclick="saveNewPass()">Salvar nova senha</button>`);
 }
 async function saveNewPass() {
-  const a = $('#rp1').value, b = $('#rp2').value; if (a.length < 6) return T('A senha precisa ter pelo menos 6 caracteres.'); if (a !== b) return T('As senhas não são iguais.');
+  const a = $('#rp1').value, b = $('#rp2').value; if (a.length < 8) return T('A senha precisa ter pelo menos 8 caracteres.'); if (a !== b) return T('As senhas não são iguais.');
   const { error } = await sb.auth.updateUser({ password: a }); if (error) return T('Não salvou: ' + error.message);
   closeM(); history.replaceState(null, '', location.pathname); T('Senha alterada! Você já está dentro.');
 }
@@ -57,7 +57,7 @@ async function loadNotifs() {
     ((data || []).filter(n => n.actor || SYS_TYPES.includes(n.type)).map(n => !n.actor ? sysRow(n) : `<button class="w-full flex items-center gap-3 p-3 text-left hover:bg-soft transition ${n.read ? '' : 'bg-brand/10'}" onclick="openNotif('${n.type}','${n.ref_id || ''}','${n.actor.id}')"><span class="relative shrink-0">${av(n.actor, 46)}<span class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-brand text-white grid place-items-center ring-2 ring-card">${ic(ico[n.type] || 'bell', n.type === 'like', 11)}</span></span><div class="text-sm flex-1 min-w-0"><b>${E(n.actor.name)}</b> ${tx[n.type] || 'interagiu com você'}<div class="text-xs text-mut mt-0.5">${ago(n.created_at)}</div></div></button>`).join('') || '<p class="p-10 text-center text-sm text-mut">Nenhuma notificação por enquanto.</p>') + '</div></div>';
   if ((data || []).some(n => !n.read)) { await sb.from('notifications').update({ read: true }).eq('user_id', P.id).eq('read', false); loadBadge() }
 }
-function openNotif(type, ref, actor) { if (type === 'guild_request' || type === 'guild_approved' || type === 'guild_invite' || type === 'guild_invite_accepted') return openGuild(ref); if (type === 'support_reply') return openSupport(ref); if (type === 'story_react') return openOwnStories(ref); if (type === 'follow' || !ref) return showProfile(actor); showPost(ref, type === 'comment' || type === 'reply') }
+function openNotif(type, ref, actor) { if (SYS_TYPES.includes(type)) return ntOpenLatest(type); if (type === 'guild_request' || type === 'guild_approved' || type === 'guild_invite' || type === 'guild_invite_accepted') return openGuild(ref); if (type === 'support_reply') return openSupport(ref); if (type === 'story_react') return openOwnStories(ref); if (type === 'follow' || !ref) return actor ? showProfile(actor) : undefined; showPost(ref, type === 'comment' || type === 'reply') }
 async function showPost(id, withC) {
   go('other'); window.lastProfile = null; window.reloadOther = () => showPost(id); $('#q').value = '';
   const el = $('#v-other'); el.innerHTML = backBtn('notif') + '<div class="sk h-48"></div>';
@@ -111,11 +111,15 @@ function openAbout() { modal(`<h3 class="font-bold text-lg mb-2">OtaWeb</h3><p c
 async function openSettings() {
   go('other'); window.lastProfile = null; window.reloadOther = () => {}; $('#q').value = '';
   const { data: { user } } = await sb.auth.getUser(), off = P.show_status === false;
+  const { data: pv } = await sb.from('profile_private').select('phone,phone_verified,birth_date').eq('user_id', P.id).maybeSingle(), maxBirth = new Date(Date.now() - 13 * 365.25 * 864e5).toISOString().slice(0, 10);
   $('#v-other').innerHTML = backBtn('menu') + `<h2 class="font-bold text-xl px-1">Definições</h2>
   <div class="card p-4 space-y-3"><div class="text-sm font-semibold">Perfil</div><input id="s-name" class="inp" value="${E(P.name)}" maxlength="30" placeholder="Nome"><input id="s-bio" class="inp" value="${E(P.bio || '')}" maxlength="120" placeholder="Bio"><input id="s-fav" class="inp" value="${E(P.fav_anime || '')}" maxlength="60" placeholder="Anime favorito">
    <div class="text-xs text-mut">Seu @usuário (@${E(P.handle)}) não pode ser alterado.</div><button class="btn" onclick="setProfile()">Salvar perfil</button></div>
+  <div class="card p-4 space-y-3"><div class="text-sm font-semibold">Telefone e nascimento</div><div class="text-xs text-mut">Só você vê estes dados. Com o número você pode entrar na conta (ainda sem confirmação por SMS).</div><input id="s-phone" type="tel" class="inp" value="${E((pv && pv.phone) || '')}" placeholder="+código do país e número (opcional)" maxlength="24">
+  ${pv && pv.birth_date ? `<div class="text-xs text-mut"><span>Nascimento:</span> <b>${E(pv.birth_date.split('-').reverse().join('/'))}</b> <span>(não pode ser alterado)</span></div>` : `<div><div class="text-xs text-mut mb-1">Data de nascimento</div><input id="s-birth" type="date" class="inp" max="${maxBirth}"></div>`}
+  <button class="btn2" onclick="setPrivate()">Salvar</button></div>
   <div class="card p-4 space-y-3"><div class="text-sm font-semibold">E-mail</div><div class="text-xs text-mut">Atual: ${E(user.email)}</div><input id="s-mail" type="email" class="inp" placeholder="Novo e-mail"><button class="btn2" onclick="setEmail()">Alterar e-mail</button></div>
-  <div class="card p-4 space-y-3"><div class="text-sm font-semibold">Senha</div><input id="s-p1" type="password" class="inp" placeholder="Nova senha (mín. 6)" autocomplete="new-password"><input id="s-p2" type="password" class="inp" placeholder="Repita a nova senha" autocomplete="new-password"><button class="btn2" onclick="setPass()">Alterar senha</button></div>
+  <div class="card p-4 space-y-3"><div class="text-sm font-semibold">Senha</div><input id="s-p1" type="password" class="inp" placeholder="Nova senha (mín. 8)" autocomplete="new-password"><input id="s-p2" type="password" class="inp" placeholder="Repita a nova senha" autocomplete="new-password"><button class="btn2" onclick="setPass()">Alterar senha</button></div>
   <div id="push-card" class="card p-4"></div>
   <div class="card p-4 flex items-center gap-3"><div class="flex-1"><div class="text-sm font-semibold">Mostrar quando estou online</div><div class="text-xs text-mut">Se desligar, os outros não veem quando você está online nem quando saiu.</div></div><button id="s-st" class="btn2 ${off ? '' : 'sel'}" onclick="setStatus()">${off ? 'Desligado' : 'Ligado'}</button></div>
   <div class="card p-4 space-y-3 !border-brand/40"><div class="text-sm font-semibold text-brand">Excluir conta</div><p class="text-xs text-mut">Apaga seu perfil, posts, comentários e mensagens. Não dá para desfazer.</p><button class="btn2 !text-brand" onclick="askDelete()">Excluir minha conta</button></div>`;
@@ -127,7 +131,7 @@ async function setProfile() {
 }
 async function setEmail() { const e = $('#s-mail').value.trim(); if (!e) return T('Digite o novo e-mail.'); const { error } = await sb.auth.updateUser({ email: e }); if (error) return T('Não alterou: ' + error.message); T('Enviamos um link de confirmação para o novo e-mail.') }
 async function setPass() {
-  const a = $('#s-p1').value, b = $('#s-p2').value; if (a.length < 6) return T('A senha precisa ter pelo menos 6 caracteres.'); if (a !== b) return T('As senhas não são iguais.');
+  const a = $('#s-p1').value, b = $('#s-p2').value; if (a.length < 8) return T('A senha precisa ter pelo menos 8 caracteres.'); if (a !== b) return T('As senhas não são iguais.');
   const { error } = await sb.auth.updateUser({ password: a }); if (error) return T('Não alterou: ' + error.message); $('#s-p1').value = $('#s-p2').value = ''; T('Senha alterada.');
 }
 async function setStatus() {
@@ -155,4 +159,27 @@ function ntText(n) {
   if (n.type === 'appeal_result') return d.accepted ? ['Seu pedido de revisão foi aceito', d.response || 'A penalidade foi levantada.', ''] : ['Seu pedido de revisão foi negado', d.response || 'Veja os detalhes.', ''];
   return [n.title || 'OtaWeb', n.body || '', ''];
 }
-const sysRow = n => { const [t, b, act] = ntText(n); return `<button class="w-full flex items-center gap-3 p-3 text-left hover:bg-soft transition ${n.read ? '' : 'bg-brand/10'}" ${act ? `onclick="${act}"` : ''}>${appMark(46)}<div class="text-sm flex-1 min-w-0"><b>${E(t)}</b><div class="text-mut">${E(b)}</div><div class="text-xs text-mut mt-0.5">${ago(n.created_at)}</div></div></button>` };
+const NT_SYS = {};
+const sysRow = n => { NT_SYS[n.id] = n; const [t, b] = ntText(n); return `<button class="w-full flex items-center gap-3 p-3 text-left hover:bg-soft transition ${n.read ? '' : 'bg-brand/10'}" onclick="ntOpen('${n.id}')">${appMark(46)}<div class="text-sm flex-1 min-w-0"><b>${E(t)}</b><div class="text-mut line-clamp-2">${E(b)}</div><div class="text-xs text-mut mt-0.5">${ago(n.created_at)}</div></div></button>` };
+// janela com o aviso completo (boas-vindas, penalidades, avisos da equipe)
+function ntOpen(id) {
+  const n = NT_SYS[id]; if (!n) return; const [t, b, act] = ntText(n);
+  modal(`<div class="space-y-3"><div class="flex items-center gap-3">${appMark(40)}<div class="min-w-0"><div class="font-bold text-lg leading-tight">${E(t)}</div><div class="text-xs text-mut">${ago(n.created_at)}</div></div></div>
+   <p class="text-[15px] leading-relaxed whitespace-pre-wrap break-words">${E(b)}</p>
+   <div class="flex gap-2 justify-end">${act ? `<button class="btn" onclick="closeM();${act}">Ver detalhes</button>` : ''}<button class="btn2" onclick="closeM()">Fechar</button></div></div>`);
+  if (!n.read) { n.read = true; sb.from('notifications').update({ read: true }).eq('id', id).then(() => { if (typeof loadBadge === 'function') loadBadge() }) }
+}
+// abre o aviso mais recente de um tipo (usado ao tocar na notificação do celular)
+async function ntOpenLatest(type) {
+  const { data } = await sb.from('notifications').select('id,type,title,body,data,read,created_at').eq('user_id', P.id).eq('type', type).order('created_at', { ascending: false }).limit(1);
+  if (data && data[0]) { NT_SYS[data[0].id] = data[0]; ntOpen(data[0].id) }
+}
+
+async function setPrivate() {
+  const phone = normPhone($('#s-phone').value); if (phone === null) return T('Número inválido. Use o código do país, ex.: +244 912 345 678');
+  const bEl = $('#s-birth'), birth = bEl ? bEl.value : '';
+  if (bEl && birth) { const a = ageOf(birth); if (a < 0 || a > 120) return T('Data de nascimento inválida.'); if (a < MIN_AGE) return T('É preciso ter pelo menos 13 anos para criar uma conta.') }
+  const { error } = await sb.rpc('set_my_private', { p_phone: phone, p_birth: birth || null });
+  if (error) return T(/set_my_private|does not exist/.test(error.message) ? 'Falta rodar a migração 16 no Supabase.' : /em uso|already|unique/i.test(error.message) ? 'Esse número já está em uso em outra conta.' : error.message);
+  T('Salvo!'); openSettings();
+}

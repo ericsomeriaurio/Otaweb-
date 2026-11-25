@@ -31,23 +31,84 @@ async function dlm(url) {
 async function copy(t) { try { await navigator.clipboard.writeText(t); T('Copiado! 📋') } catch (e) { T('Não foi possível copiar.') } }
 
 /* ---------- AUTH ---------- */
-function authMode(m) { mode = m; $('#up-f').classList.toggle('hidden', m !== 'up'); $('#a-go').textContent = m === 'up' ? 'Criar minha conta' : 'Entrar'; $('#t-in').classList.toggle('tab-on', m === 'in'); $('#t-up').classList.toggle('tab-on', m === 'up'); $('#a-err').textContent = ''; $('#a-forgot').classList.toggle('hidden', m === 'up') }
+const MIN_AGE = 13, MIN_PASS = 8, trx = x => (typeof tr === 'function' ? tr(x) : x);
+// '' = sem número · null = número inválido · senão +código e dígitos
+const normPhone = s => { const t = String(s || '').replace(/[\s().-]/g, ''); return t === '' ? '' : /^\+[1-9][0-9]{7,14}$/.test(t) ? t : null };
+const ageOf = iso => { const d = new Date(iso + 'T00:00:00'); if (isNaN(d)) return -1; const n = new Date(); let a = n.getFullYear() - d.getFullYear(); if (n.getMonth() < d.getMonth() || (n.getMonth() === d.getMonth() && n.getDate() < d.getDate())) a--; return a };
+const emailOk = s => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s);
+// texto de busca seguro para filtros do banco (tira vírgulas, parênteses, aspas e curingas)
+const safeQ = s => String(s || '').replace(/[,()"'\\%_*:;]/g, ' ').replace(/\s+/g, ' ').trim();
+
+function authMode(m) {
+  mode = m; const up = m === 'up';
+  $('#up-f').classList.toggle('hidden', !up); $('#up-f2').classList.toggle('hidden', !up); $('#up-f3').classList.toggle('hidden', !up);
+  $('#a-go').textContent = trx(up ? 'Criar minha conta' : 'Entrar'); $('#t-in').classList.toggle('tab-on', !up); $('#t-up').classList.toggle('tab-on', up);
+  $('#a-err').textContent = ''; $('#a-forgot').classList.toggle('hidden', up);
+  $('#a-email').placeholder = trx(up ? 'E-mail' : 'E-mail, @usuário ou número (+código)');
+  $('#a-pass').placeholder = trx(up ? 'Senha (mín. 8 caracteres)' : 'Senha'); $('#a-pass').autocomplete = up ? 'new-password' : 'current-password';
+  const bd = $('#a-birth'); if (bd && !bd.max) { const n = new Date(); n.setFullYear(n.getFullYear() - MIN_AGE); bd.max = n.toISOString().slice(0, 10); bd.min = '1900-01-01' }
+}
+// entrar por e-mail (direto) ou por @usuário / número (pela função do servidor, que não expõe e-mails)
+async function signInAny(login, password) {
+  if (login.includes('@') && !login.startsWith('@')) return sb.auth.signInWithPassword({ email: login, password });
+  let res; try { res = await fetch((window.FN_URL || (SUPABASE_URL + '/functions/v1/super-action')) + '/login', { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: SUPABASE_KEY }, body: JSON.stringify({ login, password }) }) } catch (e) { return { error: { message: 'login_offline' } } }
+  const j = await res.json().catch(() => ({}));
+  if (j.ok) { const r = await sb.auth.setSession({ access_token: j.access_token, refresh_token: j.refresh_token }); return r.error ? { error: r.error } : { data: r.data, error: null } }
+  return { error: { message: j.error === 'rate' ? 'login_rate' : j.error === 'unconfirmed' ? 'Email not confirmed' : res.status === 404 ? 'login_nofn' : 'Invalid login' } };
+}
+function authMsg(m) {
+  m = String(m || '');
+  if (/login_rate|rate limit|over_request|too many/i.test(m)) return 'Muitas tentativas. Espere alguns minutos e tente de novo.';
+  if (/login_nofn|login_offline|Failed to fetch/i.test(m)) return 'Entrar por @usuário ou número não está disponível agora. Entre com o seu e-mail.';
+  if (/not confirmed/i.test(m)) return 'Confirme seu e-mail (veja também o spam) e tente de novo.';
+  if (/Invalid login/i.test(m)) return 'Dados de login ou senha incorretos.';
+  if (/Database error|duplicate|unique|already/i.test(m)) return 'Esse @usuário, e-mail ou número já está em uso.';
+  if (/weak|should be at least|too short/i.test(m)) return 'Senha fraca. Use pelo menos 8 caracteres.';
+  return m;
+}
 async function doAuth() {
-  const email = $('#a-email').value.trim(), password = $('#a-pass').value, err = $('#a-err'); err.textContent = ''; $('#a-go').disabled = true;
-  let r;
+  const login = $('#a-email').value.trim(), password = $('#a-pass').value, err = $('#a-err'), btn = $('#a-go');
+  const fail = m => { err.textContent = trx(m); btn.disabled = false };
+  err.textContent = ''; btn.disabled = true; let r;
   if (mode === 'up') {
-    const name = $('#a-name').value.trim(), handle = $('#a-handle').value.trim().replace(/^@/, '').toLowerCase();
-    if (name.length < 2) { err.textContent = 'Escolha um nome.'; $('#a-go').disabled = false; return }
-    if (!/^[a-z0-9_]{3,20}$/.test(handle)) { err.textContent = 'Usuário: 3-20 letras minúsculas, números ou _'; $('#a-go').disabled = false; return }
-    r = await sb.auth.signUp({ email, password, options: { data: { name, handle } } });
-    if (!r.error && !r.data.session) { err.textContent = 'Conta criada! Confirme o e-mail e depois entre.'; $('#a-go').disabled = false; return }
-  } else r = await sb.auth.signInWithPassword({ email, password });
-  $('#a-go').disabled = false;
-  if (r.error) err.textContent = /Database error|duplicate|unique/i.test(r.error.message) ? 'Esse @usuario ou e-mail já existe.' : /Invalid login/i.test(r.error.message) ? 'E-mail ou senha incorretos.' : r.error.message;
+    const name = $('#a-name').value.trim(), handle = $('#a-handle').value.trim().replace(/^@/, '').toLowerCase(), phone = normPhone($('#a-phone').value), birth = $('#a-birth').value;
+    if (name.length < 2) return fail('Escolha um nome.');
+    if (!/^[a-z0-9_]{3,20}$/.test(handle)) return fail('Usuário: 3-20 letras minúsculas, números ou _');
+    if (!emailOk(login)) return fail('Digite um e-mail válido.');
+    if (phone === null) return fail('Número inválido. Use o código do país, ex.: +244 912 345 678');
+    if (!birth) return fail('Informe a data de nascimento.');
+    const age = ageOf(birth); if (age < 0 || age > 120) return fail('Data de nascimento inválida.');
+    if (age < MIN_AGE) return fail('É preciso ter pelo menos 13 anos para criar uma conta.');
+    if (password.length < MIN_PASS) return fail('A senha precisa ter pelo menos 8 caracteres.');
+    if (password !== $('#a-pass2').value) return fail('As senhas não são iguais.');
+    r = await sb.auth.signUp({ email: login, password, options: { data: { name, handle, phone: phone || '', birth } } });
+    if (!r.error && !r.data.session) { err.textContent = trx('Conta criada! Confirme o e-mail e depois entre.'); btn.disabled = false; return }
+  } else {
+    if (!login || !password) return fail('Digite seus dados e a senha.');
+    r = await signInAny(login, password);
+  }
+  btn.disabled = false;
+  if (r.error) err.textContent = trx(authMsg(r.error.message));
   else if (r.data && r.data.session) startSession(r.data.session);
 }
+
+/* olho para mostrar/ocultar a senha em TODOS os campos de senha (inclusive os que aparecem depois) */
+const EYE = {
+  on: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+  off: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.9 17.9A10.4 10.4 0 0 1 12 19C5.6 19 2 12 2 12a18 18 0 0 1 4.1-5.2M9.9 4.2A9.7 9.7 0 0 1 12 4c6.4 0 10 8 10 8a18 18 0 0 1-2.2 3.2M1 1l22 22"/><path d="M14.1 14.1a3 3 0 1 1-4.2-4.2"/></svg>'
+};
+function pwEnhance() {
+  document.querySelectorAll('input[type=password]:not([data-pw])').forEach(i => {
+    i.dataset.pw = '1'; const cs = getComputedStyle(i), w = document.createElement('div'); w.className = 'relative'; w.style.marginTop = cs.marginTop; w.style.marginBottom = cs.marginBottom;
+    i.parentNode.insertBefore(w, i); w.appendChild(i); i.style.margin = '0'; i.style.paddingRight = '44px';
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-mut'; b.setAttribute('aria-label', trx('Mostrar senha')); b.innerHTML = EYE.on;
+    b.onclick = () => { const show = i.type === 'password'; i.type = show ? 'text' : 'password'; b.innerHTML = show ? EYE.off : EYE.on; b.setAttribute('aria-label', trx(show ? 'Ocultar senha' : 'Mostrar senha')) };
+    w.appendChild(b);
+  });
+}
+let pwT; new MutationObserver(() => { clearTimeout(pwT); pwT = setTimeout(pwEnhance, 30) }).observe(document.documentElement, { childList: true, subtree: true });
 async function boot() {
-  applyTheme(); hydrate(); renderNav(); authMode('in');
+  applyTheme(); hydrate(); renderNav(); authMode('in'); pwEnhance();
   // sem await dentro do callback (evita travar o supabase-js)
   sb.auth.onAuthStateChange((ev, ses) => { setTimeout(() => ev === 'PASSWORD_RECOVERY' ? setTimeout(() => typeof recoveryForm === 'function' && recoveryForm(), 400) : startSession(ses), 0) });
 }
@@ -69,7 +130,12 @@ function live() { if (live.on) return; live.on = true;
     .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, soon)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'poll_votes' }, soon).on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, loadBadge).subscribe();
 }
-const soon = () => { clearTimeout(rt); rt = setTimeout(() => $('#v-feed').classList.contains('hidden') ? 0 : refresh(), 400) };
+const soon = p => {
+  if (p && p.table && p.table !== 'posts') { const id = (p.new && p.new.post_id) || (p.old && p.old.post_id); if (id && !document.getElementById('p-' + id)) return }   // só atualiza se o post está na tela
+  if (document.hidden) { soon.dirty = true; return }                                                                                           // com o app em segundo plano, espera voltar
+  clearTimeout(rt); rt = setTimeout(() => $('#v-feed').classList.contains('hidden') ? 0 : refresh(), 800);
+};
+document.addEventListener('visibilitychange', () => { if (!document.hidden && soon.dirty) { soon.dirty = false; soon() } });
 
 /* ---------- NAV ---------- */
 const VIEWS = ['feed', 'reels', 'groups', 'notif', 'menu', 'msgs', 'other'];
@@ -285,7 +351,7 @@ async function follow(id, on) { on ? await sb.from('follows').delete().match({ f
 function debSearch(q) { clearTimeout(st); st = setTimeout(() => search(q.trim()), 350) }
 async function search(q) { try { await _search(q) } catch (e) { $('#v-other').innerHTML = errH(e) } }
 async function _search(q) {
-  if (!q) return go('feed'); go('other'); $('#v-feed').classList.add('hidden'); $('#v-other').classList.remove('hidden'); const s = q.replace(/[%,()]/g, ' ');
+  if (!q) return go('feed'); go('other'); $('#v-feed').classList.add('hidden'); $('#v-other').classList.remove('hidden'); const s = safeQ(q);
   const [{ data: u }, { data: ps, error: pe }] = await Promise.all([sb.from('profiles').select('id,name,handle,avatar_url').or(`name.ilike.%${s}%,handle.ilike.%${s}%`).limit(10), sb.from('posts').select(SEL).is('guild_id', null).ilike('body', `%${s}%`).order('created_at', { ascending: false }).limit(20)]);
   posts = await prep(ps);
   $('#v-other').innerHTML = `<h3 class="text-sm font-bold text-brand">Pessoas</h3>` + ((u || []).map(x => `<button onclick="showProfile('${x.id}')" class="card w-full flex items-center gap-3 p-3 text-left">${av(x)}<div><div class="text-sm font-bold">${E(x.name)}</div><div class="text-[11px] text-mut">@${E(x.handle)}</div></div></button>`).join('') || '<p class="text-xs text-mut">Ninguém encontrado.</p>') +

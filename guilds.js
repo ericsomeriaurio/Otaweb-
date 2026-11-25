@@ -218,7 +218,7 @@ async function guildInvite() {
 }
 async function giSearch() {
   const q = ($('#gi-q') ? $('#gi-q').value : '').trim().replace(/[%,()]/g, ' '), box = $('#gi-res'); if (!box) return;
-  let r = sb.from('profiles').select('id,name,handle,avatar_url').neq('id', P.id).limit(15); r = q ? r.or(`name.ilike.%${q}%,handle.ilike.%${q}%`) : r.order('created_at', { ascending: false });
+  let r = sb.from('profiles').select('id,name,handle,avatar_url').neq('id', P.id).limit(15); r = q ? r.or(`name.ilike.%${safeQ(q)}%,handle.ilike.%${safeQ(q)}%`) : r.order('created_at', { ascending: false });
   const { data } = await r; if (!$('#gi-res')) return;
   box.innerHTML = (data || []).map(u => `<div class="flex items-center gap-3 p-2">${av(u, 40)}<div class="flex-1 min-w-0"><div class="text-sm font-semibold truncate">${E(u.name)}</div><div class="text-xs text-mut">@${E(u.handle)}</div></div>${GD.inv.has(u.id) ? '<span class="text-xs text-mut">Já na guilda ou convidado</span>' : `<button class="btn !py-1.5 !px-3 text-xs" onclick="giSend('${u.id}',this)">Convidar</button>`}</div>`).join('') || '<p class="text-xs text-mut text-center py-4">Ninguém encontrado.</p>';
 }
