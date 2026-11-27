@@ -19,7 +19,7 @@ jobs:
       - name: Conferir se todos os arquivos necessários foram enviados
         run: |
           faltou=0
-          for f in index.html config.js app.js chat.js chat2.js social.js extras.js stories.js guilds.js support.js gate.js admin.js i18n.js icons.js nav.js profile.js push.js video.js patch_android.py manifest.webmanifest icon-192.png icon-512.png maskable-512.png package.json capacitor.config.json make_android_icons.py android-debug-keystore.b64; do
+          for f in index.html config.js app.js chat.js chat2.js social.js extras.js stories.js guilds.js support.js gate.js admin.js i18n.js icons.js nav.js profile.js push.js patch_android.py manifest.webmanifest icon-192.png icon-512.png maskable-512.png package.json capacitor.config.json make_android_icons.py android-debug-keystore.b64; do
             if [ ! -f "$f" ]; then echo "FALTOU ENVIAR O ARQUIVO: $f"; faltou=1; fi
           done
           exit $faltou
