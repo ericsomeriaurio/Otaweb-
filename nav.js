@@ -45,7 +45,7 @@ function layerClosed(key) {        // a janela foi fechada pela tela (não pelo 
 }
 
 /* telas que entram no histórico */
-['go', 'showProfile', 'openGuild', 'openSaved', 'openSettings', 'openSupport', 'openAccountState', 'openAdmin', 'showPost'].forEach(name => {
+['go', 'showProfile', 'openGuild', 'openSaved', 'openSettings', 'openSupport', 'openAccountState', 'openAdmin', 'showPost', 'editProfile'].forEach(name => {
   const orig = window[name]; if (typeof orig !== 'function') return;
   window[name] = function () {
     const a = Array.prototype.slice.call(arguments), top = NV.depth === 0 && !NV.restoring; let r;

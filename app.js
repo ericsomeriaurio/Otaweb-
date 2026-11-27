@@ -16,7 +16,23 @@ const ask = (t, ls) => new Promise(r => {
 const menu = (t, it) => { modal(`<h3 class="font-bold mb-3 text-sm">${t}</h3>` + it.map((x, i) => `<button class="btn2 w-full mb-2 !justify-start" id="mi${i}">${x[0]}</button>`).join('')); it.forEach((x, i) => $('#mi' + i).onclick = () => { closeM(); x[1]() }) };
 
 /* ---------- UPLOAD ---------- */
-async function upload(f) {
+// reduz fotos grandes antes de enviar (economiza armazenamento e tráfego); GIF, vídeo e áudio seguem como estão
+async function shrinkImage(f, maxSide) {
+  try {
+    if (!/^image\/(jpeg|png|webp)$/.test(f.type) || f.size < 200 * 1024) return f;
+    const bmp = await (window.createImageBitmap ? createImageBitmap(f, { imageOrientation: 'from-image' }) : new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = URL.createObjectURL(f) }));
+    const w = bmp.width || bmp.naturalWidth, h = bmp.height || bmp.naturalHeight, k = Math.min(1, maxSide / Math.max(w, h));
+    if (k === 1 && f.size < 1.5 * 1024 * 1024) return f;
+    const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k);
+    const cx = c.getContext('2d'), png = f.type === 'image/png'; if (!png) { cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height) }
+    cx.drawImage(bmp, 0, 0, c.width, c.height);
+    const out = await new Promise(r => c.toBlob(r, png ? 'image/png' : 'image/jpeg', 0.82));
+    if (!out || out.size >= f.size) return f;
+    return new File([out], f.name.replace(/\.[^.]+$/, '') + (png ? '.png' : '.jpg'), { type: out.type });
+  } catch (e) { return f }
+}
+async function upload(f, opt) {
+  f = await shrinkImage(f, (opt && opt.max) || 1600);
   if (f.size > 50 * 1024 * 1024) { T('Arquivo acima de 50 MB.'); return null }
   const ext = (f.name.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, ''),
     path = `${P.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -328,23 +344,6 @@ async function publish() {
 /* ---------- PERFIL ---------- */
 async function openHandle(h) { const { data } = await sb.from('profiles').select('id').eq('handle', h).maybeSingle(); if (data) showProfile(data.id) }
 async function showProfile(id) { try { await _showProfile(id) } catch (e) { go('other'); $('#v-other').innerHTML = errH(e) } }
-async function _showProfile(id) { window.lastProfile = id; window.reloadOther = null;
-  go('other'); const [{ data: u }, { count: seg }, { count: sing }, { data: f }, { data: ps }] = await Promise.all([
-    sb.from('profiles').select('*').eq('id', id).single(), sb.from('follows').select('*', { count: 'exact', head: true }).eq('followee', id),
-    sb.from('follows').select('*', { count: 'exact', head: true }).eq('follower', id), sb.from('follows').select('follower').match({ follower: P.id, followee: id }),
-    sb.from('posts').select(SEL).is('guild_id', null).eq('author', id).order('created_at', { ascending: false }).limit(30)]);
-  if (!u) { $('#v-other').innerHTML = '<p class="text-center text-sm text-mut py-10">Perfil não encontrado.</p>'; return } posts = await prep(ps); const mine = id === P.id, link = (window.SITE_BASE || location.href.split('#')[0]) + '#u-' + u.handle, fl = f && f.length;
-  $('#v-other').classList.remove('hidden'); $('#v-feed').classList.add('hidden');
-  $('#v-other').innerHTML = `<div class="card p-5 text-center space-y-2 pop"><div class="flex justify-center"><div class="ring"><div class="bg-card rounded-full p-1">${av(u, 92)}</div></div></div>
-  <div class="text-lg font-bold">${E(u.name)}</div><div class="text-xs text-brand">@${E(u.handle)}</div><p class="text-sm text-mut">${E(u.bio || '')}</p>${u.fav_anime ? `<div class="text-xs text-brand">${ic('star', true, 13)} ${E(u.fav_anime)}</div>` : ''}
-  <div class="flex justify-center gap-6 text-xs text-mut"><span><b>${posts.length}</b> posts</span><span><b>${seg || 0}</b> seguidores</span><span><b>${sing || 0}</b> seguindo</span></div>
-  <div class="text-[11px] text-mut break-all">${E(link)}</div>
-  <div class="flex gap-2 justify-center flex-wrap"><button class="btn2" onclick="copy('${E(link)}')">${ic('link', false, 15)} Copiar link</button>
-  ${mine ? `<label class="btn2 cursor-pointer">${ic('camera', false, 15)} Foto<input type="file" accept="image/*" class="hidden" onchange="setAv(this.files[0])"></label><button class="btn2" onclick="editProfile()">${ic('edit', false, 15)} Editar</button>` : `<button class="btn" onclick="follow('${id}',${!!fl})">${fl ? 'Seguindo' : 'Seguir'}</button><button class="btn2" onclick="startDM('${id}')">${ic('msgc', false, 15)} Mensagem</button>`}</div></div>
-  <div class="space-y-3">${safe(posts) || '<p class="text-center text-xs text-mut py-6">Sem posts ainda.</p>'}</div>`;
-}
-async function setAv(f) { if (!f) return; T('Enviando foto...'); const m = await upload(f); if (!m) return; const { error } = await sb.from('profiles').update({ avatar_url: m.url }).eq('id', P.id); if (error) return T('Não salvou a foto: ' + error.message); P.avatar_url = m.url; paintMe(); T('Foto atualizada!'); showProfile(P.id) }
-async function editProfile() { const v = await ask('Editar perfil', ['Nome (vazio = manter)', 'Bio', 'Anime favorito']); if (!v) return; const u = {}; if (v[0]) u.name = v[0]; if (v[1]) u.bio = v[1]; if (v[2]) u.fav_anime = v[2]; const { error } = await sb.from('profiles').update(u).eq('id', P.id); if (error) return T('Não salvou: ' + error.message); Object.assign(P, u); paintMe(); showProfile(P.id) }
 async function follow(id, on) { on ? await sb.from('follows').delete().match({ follower: P.id, followee: id }) : await sb.from('follows').insert({ follower: P.id, followee: id }); showProfile(id) }
 
 /* ---------- BUSCA ---------- */
