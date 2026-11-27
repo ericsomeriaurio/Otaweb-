@@ -30,18 +30,19 @@ async function _showProfile(id) {
   const badges = (u.is_admin ? '<span class="text-[10px] font-semibold rounded-full bg-brand text-white px-2 py-0.5">Equipe</span>' : '') + (tier ? `<span class="text-[10px] font-semibold rounded-full bg-soft text-brand px-2 py-0.5">${E(tier)}</span>` : '');
   const links = (Array.isArray(u.links) ? u.links : []).map(l => { const h = pfUrl(l && l.url); return h ? `<a href="${E(h)}" target="_blank" rel="noopener noreferrer nofollow" class="inline-flex items-center gap-1 rounded-full bg-soft px-2.5 py-1 text-xs text-brand font-semibold">🔗 ${E(String(l.label || '').slice(0, 24))}</a>` : '' }).join('');
   const chips = (u.location ? pfChip(`📍 ${E(u.location)}`) : '') + (u.birthday_md ? pfChip(`🎂 ${E(pfDayMonth(u.birthday_md))}`) : '') + pfChip(`📅 <span>Entrou em</span> ${E(pfMonthYear(u.created_at))}`);
-  const actions = (mine ? `<button class="btn2" onclick="editProfile()">${ic('edit', false, 15)} Editar perfil</button>`
-    : `<button class="btn" onclick="follow('${id}',${!!fl})">${fl ? 'Seguindo' : 'Seguir'}</button><button class="btn2" onclick="startDM('${id}')">${ic('msgc', false, 15)} Mensagem</button>`)
-    + `<button class="btn2" onclick="copy('${E(link)}')" aria-label="Copiar link">${ic('link', false, 15)}</button>`;
+  const actions = (mine ? `<button class="btn2 flex-1" onclick="editProfile()">${ic('edit', false, 15)} Editar perfil</button>`
+    : `<button class="btn flex-1" onclick="follow('${id}',${!!fl})">${fl ? 'Seguindo' : 'Seguir'}</button><button class="btn2 flex-1" onclick="startDM('${id}')">${ic('msgc', false, 15)} Mensagem</button>`)
+    + `<button class="btn2 !px-3" onclick="copy('${E(link)}')" aria-label="Copiar link">${ic('link', false, 15)}</button>`;
   const hint = mine && !u.cover_url && !u.bio ? '<div class="card p-3 mt-3 text-sm flex items-center gap-3"><div class="flex-1"><b>Complete seu perfil</b><div class="text-xs text-mut">Adicione uma capa, um local e seus animes favoritos para as pessoas conhecerem você.</div></div><button class="btn2" onclick="editProfile()">Editar</button></div>' : '';
   $('#v-other').classList.remove('hidden'); $('#v-feed').classList.add('hidden');
   $('#v-other').innerHTML = `<div class="card overflow-hidden pop">
    <div class="h-32 bg-gradient-to-br from-brand to-black/70 overflow-hidden">${u.cover_url ? `<img src="${E(u.cover_url)}" class="w-full h-full object-cover" loading="lazy">` : ''}</div>
-   <div class="px-4 pb-4"><div class="flex items-end justify-between gap-2 -mt-11"><div class="ring shrink-0"><div class="bg-card rounded-full p-1">${av(u, 88)}</div></div><div class="flex gap-2 pb-1 flex-wrap justify-end">${actions}</div></div>
+   <div class="px-4 pb-4"><div class="flex -mt-10"><div class="ring shrink-0"><div class="bg-card rounded-full p-1">${av(u, 76)}</div></div></div>
    <div class="flex items-center gap-2 flex-wrap mt-2"><h2 class="text-xl font-bold">${E(u.name)}</h2>${badges}</div><div class="text-sm text-brand">@${E(u.handle)}</div>
    ${u.bio ? `<p class="text-sm mt-2 whitespace-pre-wrap break-words">${E(u.bio)}</p>` : ''}
    <div class="flex flex-wrap gap-1.5 mt-3">${chips}${links}</div>
-   <div class="flex gap-5 text-sm mt-3 flex-wrap"><span><b>${np || 0}</b> posts</span><span><b>${seg || 0}</b> seguidores</span><span><b>${sing || 0}</b> seguindo</span>${ex.reactions != null ? `<span><b>${ex.reactions}</b> reações</span>` : ''}</div></div></div>${hint}
+   <div class="flex gap-5 text-sm mt-3 flex-wrap"><span><b>${np || 0}</b> posts</span><span><b>${seg || 0}</b> seguidores</span><span><b>${sing || 0}</b> seguindo</span>${ex.reactions != null ? `<span><b>${ex.reactions}</b> reações</span>` : ''}</div>
+   <div class="flex gap-2 mt-3">${actions}</div></div></div>${hint}
    <div class="flex border-b border-line mt-3" id="pf-tabs">${PF_TABS.map((t, i) => `<button data-t="${t[0]}" class="flex-1 py-2.5 text-sm font-semibold border-b-2 ${i ? 'border-transparent text-mut' : 'border-brand text-brand'}" onclick="pfTab('${t[0]}')">${t[1]}</button>`).join('')}</div>
    <div id="pf-posts" class="space-y-3 mt-3">${safe(posts) || '<p class="text-center text-xs text-mut py-6">Sem posts ainda.</p>'}</div>
    <div id="pf-media" class="hidden mt-3"></div>
