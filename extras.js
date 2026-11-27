@@ -120,10 +120,12 @@ async function openSettings() {
   <button class="btn2" onclick="setPrivate()">Salvar</button></div>
   <div class="card p-4 space-y-3"><div class="text-sm font-semibold">E-mail</div><div class="text-xs text-mut">Atual: ${E(user.email)}</div><input id="s-mail" type="email" class="inp" placeholder="Novo e-mail"><button class="btn2" onclick="setEmail()">Alterar e-mail</button></div>
   <div class="card p-4 space-y-3"><div class="text-sm font-semibold">Senha</div><input id="s-p1" type="password" class="inp" placeholder="Nova senha (mín. 8)" autocomplete="new-password"><input id="s-p2" type="password" class="inp" placeholder="Repita a nova senha" autocomplete="new-password"><button class="btn2" onclick="setPass()">Alterar senha</button></div>
+  <div id="vp-card" class="card p-4"></div>
   <div id="push-card" class="card p-4"></div>
   <div class="card p-4 flex items-center gap-3"><div class="flex-1"><div class="text-sm font-semibold">Mostrar quando estou online</div><div class="text-xs text-mut">Se desligar, os outros não veem quando você está online nem quando saiu.</div></div><button id="s-st" class="btn2 ${off ? '' : 'sel'}" onclick="setStatus()">${off ? 'Desligado' : 'Ligado'}</button></div>
   <div class="card p-4 space-y-3 !border-brand/40"><div class="text-sm font-semibold text-brand">Excluir conta</div><p class="text-xs text-mut">Apaga seu perfil, posts, comentários e mensagens. Não dá para desfazer.</p><button class="btn2 !text-brand" onclick="askDelete()">Excluir minha conta</button></div>`;
   if (typeof pushPaintCard === 'function') pushPaintCard();
+  if (typeof vpPaintSettings === 'function') vpPaintSettings();
 }
 async function setProfile() {
   const u = { name: $('#s-name').value.trim(), bio: $('#s-bio').value.trim(), fav_anime: $('#s-fav').value.trim() }; if (u.name.length < 2) return T('Escolha um nome.');

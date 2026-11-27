@@ -212,7 +212,8 @@ async function prep(rows) {
   return rows;
 }
 function mk(h) { const t = document.createElement('template'); t.innerHTML = h.trim(); const n = t.content.firstElementChild; n.dataset.h = h; return n }
-function carry(o, n, id) { const c = o.querySelector('#c-' + id), nc = n.querySelector('#c-' + id); if (c && nc && !c.classList.contains('hidden')) { nc.innerHTML = c.innerHTML; nc.classList.remove('hidden') } }
+function carry(o, n, id) { const c = o.querySelector('#c-' + id), nc = n.querySelector('#c-' + id); if (c && nc && !c.classList.contains('hidden')) { nc.innerHTML = c.innerHTML; nc.classList.remove('hidden') }
+  const v = o.querySelector('.vp'), nv = n.querySelector('.vp'); if (v && nv) nv.replaceWith(v) }   // o vídeo que está tocando continua tocando
 function paint(el, list) {
   const old = new Map([...el.children].filter(c => c.tagName === 'ARTICLE').map(c => [c.id, c])), first = old.size === 0, out = [];
   list.forEach(p => {
@@ -280,7 +281,7 @@ function postH(p) {
   return `<article class="card overflow-hidden" id="p-${p.id}">
   <div class="flex items-center gap-3 px-4 pt-3 pb-2"><div class="cursor-pointer flex items-center gap-3 flex-1 min-w-0" onclick="showProfile('${a.id}')">${av(a, 42)}<div class="min-w-0"><div class="text-sm font-semibold truncate">${E(a.name)}</div><div class="text-xs text-mut">@${E(a.handle)} · ${ago(p.created_at)}${p.edited_at ? ' · editado' : ''}</div></div></div>
    <button class="circ !w-9 !h-9 !bg-transparent" onclick="postMenu('${p.id}')" aria-label="Mais opções">${ic('more', false, 20)}</button></div>
-  ${p.body ? `<p class="px-4 pb-3 text-[15px] leading-relaxed whitespace-pre-wrap break-words">${linkify(p.body)}</p>` : ''}${p.media_url ? `<div class="bg-black">${mediaH(p.media_url, p.media_type, 'w-full max-h-[32rem]')}</div>` : ''}${o}${poll}${sum}
+  ${p.body ? `<p class="px-4 pb-3 text-[15px] leading-relaxed whitespace-pre-wrap break-words">${linkify(p.body)}</p>` : ''}${p.media_url ? (p.media_type === 'video' && typeof vidH === 'function' ? vidH(p) : `<div class="bg-black">${mediaH(p.media_url, p.media_type, 'w-full max-h-[32rem]')}</div>`) : ''}${o}${poll}${sum}
   <div class="grid grid-cols-3 gap-1 px-2 py-1 border-t border-line">
    <div class="rwrap relative" oncontextmenu="return false" ontouchstart="lp(this)" ontouchend="lpEnd()" ontouchmove="lpEnd()"><div class="rpick">${Object.keys(RX).map(k => `<button onclick="react('${p.id}','${k}')" title="${RX[k][0]}">${rx(k, 32)}</button>`).join('')}</div>
     <button class="act w-full ${mine ? 'hb' : ''}" style="${mine ? 'color:' + RX[mt][1] : ''}" onclick="mainReact(this,'${p.id}',${!!mine})">${mine ? rx(mt, 20) : ic('like', false, 20)}${mine ? RX[mt][0] : 'Curtir'}</button></div>
