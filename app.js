@@ -191,13 +191,14 @@ async function loadReels() {
   else { const io = new IntersectionObserver(es => es.forEach(e => e.isIntersecting ? e.target.play().catch(() => {}) : e.target.pause()), { threshold: .7 }); document.querySelectorAll('#rl video').forEach(v => io.observe(v)) }
 }
 function reelH(p) {
-  const nc = (p.comments && p.comments[0] && p.comments[0].count) || 0, vp = typeof vpSeekH === 'function';
+  const nc = (p.comments && p.comments[0] && p.comments[0].count) || 0, vp = typeof vpSeekH === 'function', sv = (p.saves || []).some(x => x.user_id === P.id);
   return `<div class="snap-start h-full relative grid place-items-center vp-r" data-pid="${p.id}"><video src="${E(p.media_url)}" ${vp && vpAutoNext() ? '' : 'loop'} ${vp ? 'data-rl="1"' : ''} playsinline preload="metadata" muted class="h-full w-full object-contain" onclick="${vp ? "vpTap(event,this.closest('.vp-r'))" : 'this.muted=false;this.paused?this.play():this.pause()'}"></video>
   ${vp ? vpReelUI() : ''}
   <div class="absolute bottom-12 left-4 right-20 text-white pointer-events-none"><button class="pointer-events-auto flex items-center gap-2 font-semibold text-sm" onclick="if(window.vpLeave)vpLeave();showProfile('${p.author.id}')">${av(p.author, 32)}@${E(p.author.handle)}</button><div class="text-sm opacity-90">${linkify(p.body)}</div></div>
   <div class="absolute bottom-14 right-3 flex flex-col gap-4 text-white items-center text-xs">
    ${reelBtn(p)}
    <button class="act !flex-col !gap-1 !p-1 !text-white" onclick="openComments('${p.id}')" aria-label="Comentar">${ic('msgc', false, 28)}<span class="text-xs">${nc}</span></button>
+   <button class="act !p-1 !text-white rsv-${p.id}" onclick="save('${p.id}',${sv})" aria-label="Salvar">${ic('bookmark', sv, 26)}</button>
    <button onclick="share('${p.id}')">${ic('share', false, 26)}</button><button onclick="dlm('${E(p.media_url)}')">${ic('download', false, 26)}</button></div>
   ${vp ? vpSeekH(true) : ''}</div>`;
 }

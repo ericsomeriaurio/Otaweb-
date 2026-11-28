@@ -69,7 +69,7 @@ async function showPost(id, withC) {
 
 /* ---------- salvos por categoria ---------- */
 async function save(id, on) {
-  if (on) return menu('Publicação salva', [[ic('bookmark') + ' Mudar de categoria', () => saveTo(id)], [ic('trash') + ' Remover dos salvos', async () => { await sb.from('saves').delete().match({ post_id: id, user_id: P.id }); T('Removido dos salvos'); refresh() }]]);
+  if (on) return menu('Publicação salva', [[ic('bookmark') + ' Mudar de categoria', () => saveTo(id)], [ic('trash') + ' Remover dos salvos', async () => { await sb.from('saves').delete().match({ post_id: id, user_id: P.id }); T('Removido dos salvos'); savedUI(id, false) }]]);
   saveTo(id);
 }
 async function saveTo(id) {
@@ -81,7 +81,13 @@ async function doSave(id, cat) {
   if (!cat) return T('Escolha ou crie uma categoria.'); closeM();
   const { error } = await sb.from('saves').upsert({ post_id: id, user_id: P.id, category: cat }, { onConflict: 'post_id,user_id' });
   if (error) return T(/category/.test(error.message) ? 'Falta rodar a migração 4 no Supabase.' : 'Não salvou: ' + error.message);
-  T('Salvo em ' + cat); refresh();
+  T('Salvo em ' + cat); savedUI(id, true);
+}
+// atualiza o estado de "salvo" sem recarregar o feed (assim funciona também na aba Reels e na tela cheia)
+function savedUI(id, on) {
+  const p = posts.find(x => x.id === id); if (p) { p.saves = (p.saves || []).filter(s => s.user_id !== P.id); if (on) p.saves.push({ user_id: P.id }) }
+  document.querySelectorAll('.rsv-' + id).forEach(b => { b.innerHTML = ic('bookmark', on, 26); b.setAttribute('onclick', `save('${id}',${on})`) });
+  if (p && document.getElementById('p-' + id)) repaintPost(p);
 }
 async function openSaved(cat) {
   SV.cat = cat || 'Todos'; go('other'); window.lastProfile = null; window.reloadOther = () => openSaved(SV.cat); $('#q').value = '';
